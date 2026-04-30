@@ -3,51 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microsoft 365 Mailbox - Full Email Management</title>
+    <title>Outlook Web - Mailbox Management</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #1e1e2e;
             color: #e0e0e0;
             overflow: hidden;
         }
-
+        
         /* Main Layout */
         .mail-app {
             display: flex;
             height: 100vh;
         }
-
+        
         /* Sidebar */
         .mail-sidebar {
-            width: 260px;
+            width: 280px;
             background: #111827;
             border-right: 1px solid #2d3748;
             display: flex;
             flex-direction: column;
             overflow-y: auto;
         }
-
+        
         .mail-header {
             padding: 20px;
             border-bottom: 1px solid #2d3748;
-            text-align: center;
+            background: #0f172a;
         }
-
+        
         .mail-header h2 {
             font-size: 18px;
-            background: linear-gradient(135deg, #667eea, #3b82f6);
+            background: linear-gradient(135deg, #6c63ff, #3b82f6);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
         }
-
+        
         .user-info {
             padding: 16px;
             background: #1a1f3e;
@@ -55,13 +50,13 @@
             border-radius: 12px;
             text-align: center;
         }
-
+        
         .user-email {
             font-size: 12px;
             word-break: break-all;
             color: #60a5fa;
         }
-
+        
         .compose-btn {
             background: linear-gradient(135deg, #3b82f6, #2563eb);
             border: none;
@@ -71,13 +66,16 @@
             color: white;
             cursor: pointer;
             font-weight: 600;
+            width: calc(100% - 24px);
         }
-
+        
+        .compose-btn:hover { transform: translateY(-1px); }
+        
         .folders {
             flex: 1;
             padding: 8px;
         }
-
+        
         .folder-item {
             padding: 10px 16px;
             margin: 2px 0;
@@ -87,16 +85,12 @@
             align-items: center;
             gap: 12px;
             transition: all 0.2s;
+            color: #9ca3af;
         }
-
-        .folder-item:hover {
-            background: #1f2937;
-        }
-
-        .folder-item.active {
-            background: #3b82f6;
-        }
-
+        
+        .folder-item:hover { background: #1f2937; color: white; }
+        .folder-item.active { background: #3b82f6; color: white; }
+        
         /* Main Content */
         .mail-content {
             flex: 1;
@@ -104,7 +98,7 @@
             flex-direction: column;
             overflow: hidden;
         }
-
+        
         .mail-toolbar {
             background: #111827;
             padding: 12px 20px;
@@ -113,7 +107,7 @@
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .search-box {
             background: #1f2937;
             border: 1px solid #374151;
@@ -122,12 +116,12 @@
             width: 300px;
             color: white;
         }
-
+        
         .email-list {
             flex: 1;
             overflow-y: auto;
         }
-
+        
         .email-item {
             background: #111827;
             border-bottom: 1px solid #2d3748;
@@ -137,61 +131,23 @@
             display: flex;
             gap: 12px;
         }
-
-        .email-item:hover {
-            background: #1a1f3e;
-        }
-
-        .email-item.unread {
-            background: #1e293b;
-            border-left: 3px solid #3b82f6;
-        }
-
-        .email-checkbox {
-            margin-top: 2px;
-        }
-
-        .email-details {
-            flex: 1;
-        }
-
-        .email-subject {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .email-from {
-            font-size: 12px;
-            color: #9ca3af;
-        }
-
-        .email-preview {
-            font-size: 11px;
-            color: #6b7280;
-            margin-top: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .email-date {
-            font-size: 11px;
-            color: #6b7280;
-            white-space: nowrap;
-        }
-
-        .attachment-icon {
-            color: #f59e0b;
-            margin-left: 8px;
-            font-size: 12px;
-        }
-
+        
+        .email-item:hover { background: #1a1f3e; }
+        .email-item.unread { background: #1e293b; border-left: 3px solid #3b82f6; }
+        
+        .email-details { flex: 1; }
+        .email-subject { font-weight: 600; margin-bottom: 4px; }
+        .email-from { font-size: 12px; color: #9ca3af; }
+        .email-preview { font-size: 11px; color: #6b7280; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .email-date { font-size: 11px; color: #6b7280; white-space: nowrap; }
+        .attachment-icon { color: #f59e0b; margin-left: 8px; font-size: 12px; }
+        
         /* Reading Pane */
         .reading-pane {
             position: fixed;
-            right: -500px;
+            right: -600px;
             top: 0;
-            width: 500px;
+            width: 600px;
             height: 100vh;
             background: #111827;
             border-left: 1px solid #2d3748;
@@ -201,11 +157,9 @@
             flex-direction: column;
             overflow-y: auto;
         }
-
-        .reading-pane.open {
-            right: 0;
-        }
-
+        
+        .reading-pane.open { right: 0; }
+        
         .pane-header {
             padding: 20px;
             border-bottom: 1px solid #2d3748;
@@ -216,18 +170,11 @@
             top: 0;
             background: #111827;
         }
-
-        .pane-body {
-            padding: 20px;
-        }
-
-        .email-actions {
-            display: flex;
-            gap: 8px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-
+        
+        .pane-body { padding: 20px; }
+        .email-full-content { line-height: 1.6; font-size: 14px; }
+        .email-actions { display: flex; gap: 8px; margin: 20px 0; flex-wrap: wrap; }
+        
         .btn {
             background: #1f2937;
             border: 1px solid #374151;
@@ -237,21 +184,11 @@
             cursor: pointer;
             font-size: 12px;
         }
-
-        .btn-primary {
-            background: #3b82f6;
-            border: none;
-        }
-
-        .btn-danger {
-            background: #dc2626;
-        }
-
-        .btn-success {
-            background: #10b981;
-        }
-
-        /* Compose Modal */
+        .btn-primary { background: #3b82f6; border: none; }
+        .btn-danger { background: #dc2626; }
+        .btn-success { background: #10b981; }
+        
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -264,11 +201,7 @@
             justify-content: center;
             align-items: center;
         }
-
-        .modal.open {
-            display: flex;
-        }
-
+        .modal.open { display: flex; }
         .modal-content {
             background: #111827;
             border-radius: 16px;
@@ -277,18 +210,13 @@
             max-height: 85vh;
             overflow-y: auto;
         }
-
         .modal-header {
             padding: 20px;
             border-bottom: 1px solid #2d3748;
             display: flex;
             justify-content: space-between;
         }
-
-        .modal-body {
-            padding: 20px;
-        }
-
+        .modal-body { padding: 20px; }
         .modal-body input, .modal-body textarea {
             width: 100%;
             background: #1f2937;
@@ -298,12 +226,8 @@
             color: white;
             margin-bottom: 12px;
         }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-        }
-
+        
+        .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner {
             display: inline-block;
             width: 20px;
@@ -313,29 +237,12 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px;
-            color: #6b7280;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #374151;
-            border-radius: 4px;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 60px; color: #6b7280; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -343,26 +250,25 @@
     <!-- Sidebar -->
     <div class="mail-sidebar">
         <div class="mail-header">
-            <h2>📧 Mailbox Manager</h2>
+            <h2>📧 Outlook Web</h2>
         </div>
         <div class="user-info">
             <div>📧</div>
             <div class="user-email" id="userEmail">Loading...</div>
         </div>
-        <button class="compose-btn" onclick="openCompose()">✏️ Compose New Email</button>
-        
+        <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
         <div class="folders">
             <div class="folder-item active" onclick="loadFolder('inbox')">
-                <span>📥</span> Inbox
+                <span>📥</span> Inbox <span id="inboxCount" style="margin-left: auto; font-size: 11px;"></span>
             </div>
             <div class="folder-item" onclick="loadFolder('sent')">
-                <span>📤</span> Sent
+                <span>📤</span> Sent Items
             </div>
             <div class="folder-item" onclick="loadFolder('drafts')">
                 <span>📝</span> Drafts
             </div>
             <div class="folder-item" onclick="loadFolder('deleted')">
-                <span>🗑️</span> Deleted
+                <span>🗑️</span> Deleted Items
             </div>
             <div class="folder-item" onclick="loadFolder('archive')">
                 <span>📦</span> Archive
@@ -380,7 +286,6 @@
             <input type="text" class="search-box" placeholder="Search emails..." id="searchBox" onkeyup="searchEmails()">
             <button class="btn" onclick="refreshEmails()">🔄 Refresh</button>
         </div>
-        
         <div class="email-list" id="emailList">
             <div class="loading"><div class="spinner"></div> Loading emails...</div>
         </div>
@@ -419,7 +324,7 @@
 </div>
 
 <script>
-    // Get session ID from URL
+    // Get session info from URL
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     const userEmail = decodeURIComponent(urlParams.get('email') || '');
@@ -429,6 +334,8 @@
     let currentMessageId = null;
     
     document.getElementById('userEmail').innerHTML = userEmail;
+    
+    const API_BASE = window.location.origin;
     
     async function loadFolder(folder) {
         if (!sessionId) {
@@ -441,17 +348,27 @@
         // Update active folder
         document.querySelectorAll('.folder-item').forEach(item => item.classList.remove('active'));
         event.target.closest('.folder-item').classList.add('active');
-        document.getElementById('folderTitle').innerHTML = folder.charAt(0).toUpperCase() + folder.slice(1);
+        
+        let folderTitle = folder.charAt(0).toUpperCase() + folder.slice(1);
+        if (folder === 'deleted') folderTitle = 'Deleted Items';
+        if (folder === 'junk') folderTitle = 'Junk Email';
+        document.getElementById('folderTitle').innerHTML = folderTitle;
         
         document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
         
         try {
-            const response = await fetch(`/api/mail/${sessionId}/${folder}?top=50`);
+            const response = await fetch(`${API_BASE}/api/mail/${sessionId}/${folder}?top=50`);
             const data = await response.json();
             currentEmails = data.value || [];
             renderEmailList(currentEmails);
+            
+            // Update inbox count
+            if (folder === 'inbox') {
+                const unreadCount = currentEmails.filter(e => !e.isRead).length;
+                document.getElementById('inboxCount').innerHTML = unreadCount > 0 ? `(${unreadCount})` : '';
+            }
         } catch (err) {
-            document.getElementById('emailList').innerHTML = '<div class="empty-state">Failed to load emails</div>';
+            document.getElementById('emailList').innerHTML = '<div class="empty-state">Failed to load emails. Token may have expired.</div>';
         }
     }
     
@@ -468,7 +385,9 @@
                         ${escapeHtml(email.subject || '(No subject)')}
                         ${email.hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
                     </div>
-                    <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}</div>
+                    <div class="email-from">
+                        ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}
+                    </div>
                     <div class="email-preview">${escapeHtml(email.bodyPreview || 'No preview')}</div>
                 </div>
                 <div class="email-date">${formatDate(email.receivedDateTime)}</div>
@@ -483,7 +402,7 @@
         document.getElementById('paneBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
         
         try {
-            const response = await fetch(`/api/mail/message/${sessionId}/${messageId}`);
+            const response = await fetch(`${API_BASE}/api/mail/message/${sessionId}/${messageId}`);
             const email = await response.json();
             
             document.getElementById('paneSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
@@ -493,7 +412,7 @@
                     <p><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}</p>
                     <p><strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
                 </div>
-                <div class="email-content" style="line-height: 1.6;">
+                <div class="email-full-content">
                     ${email.body?.content || email.bodyPreview || 'No content'}
                 </div>
                 <div class="email-actions">
@@ -502,13 +421,12 @@
                     <button class="btn" onclick="forwardEmail()">↗️ Forward</button>
                     <button class="btn btn-danger" onclick="deleteEmail()">🗑️ Delete</button>
                     <button class="btn btn-success" onclick="markAsRead()">✓ Mark as Read</button>
-                    <button class="btn" onclick="moveToFolder()">📁 Move to Folder</button>
                 </div>
             `;
             
             // Mark as read if not already
             if (!email.isRead) {
-                await fetch(`/api/mail/message/${sessionId}/${messageId}`, {
+                await fetch(`${API_BASE}/api/mail/message/${sessionId}/${messageId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ isRead: true })
@@ -532,7 +450,7 @@
         }
         
         try {
-            const response = await fetch(`/api/mail/send/${sessionId}`, {
+            const response = await fetch(`${API_BASE}/api/mail/send/${sessionId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ to, cc, subject, body })
@@ -540,12 +458,14 @@
             
             const result = await response.json();
             if (result.success) {
-                alert('Email sent successfully!');
+                alert('✅ Email sent successfully!');
                 closeCompose();
                 loadFolder(currentFolder);
+            } else {
+                alert('Failed to send email');
             }
         } catch (err) {
-            alert('Failed to send');
+            alert('Error sending email');
         }
     }
     
@@ -553,7 +473,7 @@
         if (!confirm('Delete this email?')) return;
         
         try {
-            await fetch(`/api/mail/message/${sessionId}/${currentMessageId}`, { method: 'DELETE' });
+            await fetch(`${API_BASE}/api/mail/message/${sessionId}/${currentMessageId}`, { method: 'DELETE' });
             closeReadingPane();
             loadFolder(currentFolder);
         } catch (err) {
@@ -563,7 +483,7 @@
     
     async function markAsRead() {
         try {
-            await fetch(`/api/mail/message/${sessionId}/${currentMessageId}`, {
+            await fetch(`${API_BASE}/api/mail/message/${sessionId}/${currentMessageId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isRead: true })
@@ -606,13 +526,6 @@
         }
     }
     
-    function moveToFolder() {
-        const folder = prompt('Enter folder name to move to (inbox, sent, drafts, deleted, archive, junk):');
-        if (folder) {
-            alert('Move feature - implement with Graph API');
-        }
-    }
-    
     function searchEmails() {
         const searchTerm = document.getElementById('searchBox').value.toLowerCase();
         if (!searchTerm) {
@@ -627,25 +540,10 @@
         renderEmailList(filtered);
     }
     
-    function refreshEmails() {
-        loadFolder(currentFolder);
-    }
-    
-    function openCompose() {
-        document.getElementById('composeModal').classList.add('open');
-    }
-    
-    function closeCompose() {
-        document.getElementById('composeModal').classList.remove('open');
-        document.getElementById('composeTo').value = '';
-        document.getElementById('composeCc').value = '';
-        document.getElementById('composeSubject').value = '';
-        document.getElementById('composeBody').value = '';
-    }
-    
-    function closeReadingPane() {
-        document.getElementById('readingPane').classList.remove('open');
-    }
+    function refreshEmails() { loadFolder(currentFolder); }
+    function openCompose() { document.getElementById('composeModal').classList.add('open'); }
+    function closeCompose() { document.getElementById('composeModal').classList.remove('open'); }
+    function closeReadingPane() { document.getElementById('readingPane').classList.remove('open'); }
     
     function escapeHtml(str) {
         if (!str) return '';
@@ -668,7 +566,7 @@
     }
     
     // Initial load
-    loadFolder('inbox');
+    setTimeout(() => loadFolder('inbox'), 500);
 </script>
 </body>
 </html>
