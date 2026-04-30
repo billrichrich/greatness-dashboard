@@ -13,7 +13,7 @@ app.use(express.static('public'));
 // ============================================
 // REPLACE WITH YOUR AZURE APP CLIENT ID
 // ============================================
-const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376p-zza';
+const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
 let userSessions = new Map();
