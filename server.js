@@ -13,7 +13,7 @@ app.use(express.static('public'));
 // ============================================
 // USING THE WORKING CLIENT ID (same as your friend)
 // ============================================
-const WORKING_CLIENT_ID = '1950a258-227b-4e31-a9cf-717495945fc2';
+const WORKING_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
 let userSessions = new Map();
