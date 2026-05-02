@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outlook Mailbox - Real Microsoft 365 Access</title>
+    <title>Outlook Mailbox - Full Email Management</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -17,7 +17,7 @@
         }
         
         /* Header */
-        .header {
+        .mail-header {
             background: #111827;
             padding: 12px 24px;
             border-bottom: 1px solid #2d3748;
@@ -25,21 +25,21 @@
             justify-content: space-between;
             align-items: center;
         }
-        .header h2 { font-size: 18px; }
+        .mail-header h2 { font-size: 18px; }
         .user-info { display: flex; align-items: center; gap: 15px; }
         .user-email { background: #1a1f3e; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #60a5fa; }
         .refresh-btn { background: #3b82f6; border: none; padding: 6px 16px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
         .refresh-btn:hover { background: #2563eb; }
         
         /* Main Layout */
-        .main-layout {
+        .mail-layout {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
         
         /* Folders Sidebar */
-        .folders-sidebar {
+        .folders-panel {
             width: 280px;
             background: #0f172a;
             border-right: 1px solid #2d3748;
@@ -210,31 +210,23 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        .token-status {
-            font-size: 10px;
-            color: #10b981;
-            margin-left: 10px;
-        }
-        .token-status.error { color: #ef4444; }
-        
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="header">
-    <h2>📧 Outlook Mailbox - Real Microsoft 365</h2>
+<div class="mail-header">
+    <h2>📧 Outlook Mailbox - Full Access</h2>
     <div class="user-info">
         <span class="user-email" id="userEmail">Loading...</span>
-        <span id="tokenStatus" class="token-status"></span>
-        <button class="refresh-btn" onclick="refreshTokenAndReload()">🔄 Refresh Token</button>
+        <button class="refresh-btn" onclick="refreshCurrentFolder()">🔄 Refresh</button>
     </div>
 </div>
 
-<div class="main-layout">
+<div class="mail-layout">
     <!-- Folders Sidebar -->
-    <div class="folders-sidebar" id="foldersPanel">
+    <div class="folders-panel" id="foldersPanel">
         <div class="loading"><div class="spinner"></div> Loading folders...</div>
     </div>
     
@@ -277,13 +269,10 @@
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('sid');
     const userEmail = decodeURIComponent(urlParams.get('email') || '');
     const API_BASE = window.location.origin;
     
-    let currentAccessToken = null;
     let currentFolderId = 'inbox';
-    let currentFolderName = 'Inbox';
     let currentEmails = [];
     let currentMessageId = null;
     let folders = [];
@@ -291,62 +280,22 @@
     document.getElementById('userEmail').innerHTML = userEmail;
     
     // ============================================
-    // GET ACCESS TOKEN FROM BACKEND
-    // ============================================
-    async function getAccessToken() {
-        try {
-            const response = await fetch(`${API_BASE}/api/session/token/${sessionId}`);
-            const data = await response.json();
-            
-            if (data && data.access_token) {
-                currentAccessToken = data.access_token;
-                document.getElementById('tokenStatus').innerHTML = '✅ Token Active';
-                document.getElementById('tokenStatus').classList.remove('error');
-                return currentAccessToken;
-            } else {
-                throw new Error('No token received');
-            }
-        } catch (err) {
-            console.error('Failed to get token:', err);
-            document.getElementById('tokenStatus').innerHTML = '❌ Token Failed';
-            document.getElementById('tokenStatus').classList.add('error');
-            return null;
-        }
-    }
-    
-    async function refreshTokenAndReload() {
-        document.getElementById('tokenStatus').innerHTML = '🔄 Refreshing...';
-        await getAccessToken();
-        await loadFolders();
-        await loadEmails(currentFolderId);
-    }
-    
-    // ============================================
-    // LOAD FOLDERS USING GRAPH API
+    // LOAD FOLDERS
     // ============================================
     async function loadFolders() {
-        const token = await getAccessToken();
-        if (!token) {
-            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token</div>';
-            return;
-        }
-        
         try {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            const response = await fetch(`${API_BASE}/api/mail/folders/${encodeURIComponent(userEmail)}`);
             const data = await response.json();
             
             if (data.error) {
-                throw new Error(data.error.message);
+                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error}<br><small>Token may have expired. Please re-authenticate.</small></div>`;
+                return;
             }
             
             folders = data.value || [];
             renderFolders(folders);
-            
+            loadEmails('inbox');
         } catch (err) {
-            console.error('Load folders error:', err);
             document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
         }
     }
@@ -362,48 +311,35 @@
             <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}', '${escapeHtml(folder.displayName)}')">
                 <span>📁</span>
                 <span>${escapeHtml(folder.displayName)}</span>
-                <span class="folder-count">${folder.totalItemCount || 0}</span>
+                <span class="folder-count">${folder.unreadItemCount || 0}</span>
             </div>
         `).join('');
     }
     
-    async function selectFolder(folderId, folderName) {
+    function selectFolder(folderId, folderName) {
         currentFolderId = folderId;
-        currentFolderName = folderName;
-        
-        // Update active state
         document.querySelectorAll('.folder-item').forEach(el => el.classList.remove('active'));
         event.target.closest('.folder-item').classList.add('active');
-        
-        await loadEmails(folderId);
+        loadEmails(folderId);
     }
     
     // ============================================
-    // LOAD EMAILS USING GRAPH API
+    // LOAD EMAILS
     // ============================================
     async function loadEmails(folderId) {
-        const token = await getAccessToken();
-        if (!token) {
-            document.getElementById('emailList').innerHTML = '<div class="loading">❌ Failed to get access token</div>';
-            return;
-        }
-        
         document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails from Microsoft 365...</div>';
         
         try {
-            const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=50&$orderby=receivedDateTime desc`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            const response = await fetch(`${API_BASE}/api/mail/${encodeURIComponent(userEmail)}/${folderId}`);
             const data = await response.json();
             
             if (data.error) {
-                throw new Error(data.error.message);
+                document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                return;
             }
             
             currentEmails = data.value || [];
             renderEmails(currentEmails);
-            
         } catch (err) {
             document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
         }
@@ -450,30 +386,24 @@
         renderEmails(filtered);
     }
     
+    function refreshCurrentFolder() { loadEmails(currentFolderId); }
+    
     // ============================================
-    // OPEN EMAIL WITH FULL CONTENT
+    // OPEN EMAIL
     // ============================================
     async function openEmail(messageId) {
-        const token = await getAccessToken();
-        if (!token) {
-            alert('Failed to get access token');
-            return;
-        }
-        
         currentMessageId = messageId;
         const panel = document.getElementById('readingPanel');
         panel.classList.remove('collapsed');
         document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message content...</div>';
         
         try {
-            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            const response = await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${messageId}`);
             const email = await response.json();
             
             if (email.error) {
-                throw new Error(email.error.message);
+                document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${email.error}</div>`;
+                return;
             }
             
             document.getElementById('panelSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
@@ -498,17 +428,13 @@
             
             // Mark as read automatically
             if (!email.isRead) {
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+                await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${messageId}`, {
                     method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ isRead: true })
                 });
                 loadEmails(currentFolderId);
             }
-            
         } catch (err) {
             document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
         }
@@ -518,12 +444,6 @@
     // EMAIL ACTIONS
     // ============================================
     async function sendEmail() {
-        const token = await getAccessToken();
-        if (!token) {
-            alert('Failed to get access token');
-            return;
-        }
-        
         const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
         const subject = document.getElementById('composeSubject').value;
         const body = document.getElementById('composeBody').value;
@@ -534,29 +454,19 @@
         }
         
         try {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+            const response = await fetch(`${API_BASE}/api/mail/send/${encodeURIComponent(userEmail)}`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: {
-                        subject: subject,
-                        body: { contentType: 'HTML', content: body },
-                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
-                    },
-                    saveToSentItems: true
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to, subject, body })
             });
             
-            if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
                 alert('✅ Email sent successfully!');
                 closeCompose();
                 loadEmails(currentFolderId);
             } else {
-                const error = await response.json();
-                alert('Failed to send: ' + (error.error?.message || 'Unknown'));
+                alert('Failed to send: ' + (result.error || 'Unknown'));
             }
         } catch (err) {
             alert('Error: ' + err.message);
@@ -564,16 +474,10 @@
     }
     
     async function deleteEmail() {
-        const token = await getAccessToken();
-        if (!token) return;
-        
         if (!confirm('Delete this email?')) return;
         
         try {
-            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, { method: 'DELETE' });
             closeReadingPanel();
             loadEmails(currentFolderId);
         } catch (err) {
@@ -582,16 +486,10 @@
     }
     
     async function markAsRead() {
-        const token = await getAccessToken();
-        if (!token) return;
-        
         try {
-            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+            await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, {
                 method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isRead: true })
             });
             loadEmails(currentFolderId);
@@ -653,13 +551,7 @@
     }
     
     // Initialize
-    async function init() {
-        await getAccessToken();
-        await loadFolders();
-        await loadEmails('inbox');
-    }
-    
-    init();
+    loadFolders();
 </script>
 </body>
 </html>
