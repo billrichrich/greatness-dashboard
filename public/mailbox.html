@@ -16,7 +16,6 @@
             overflow: hidden;
         }
         
-        /* Header */
         .mail-header {
             background: #111827;
             padding: 12px 24px;
@@ -31,14 +30,12 @@
         .refresh-btn { background: #3b82f6; border: none; padding: 6px 16px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
         .refresh-btn:hover { background: #2563eb; }
         
-        /* Main Layout */
         .mail-layout {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
         
-        /* Folders Sidebar */
         .folders-panel {
             width: 280px;
             background: #0f172a;
@@ -63,7 +60,6 @@
         .folder-count { margin-left: auto; font-size: 11px; background: #1f2937; padding: 2px 6px; border-radius: 10px; }
         .folder-item.active .folder-count { background: #2563eb; }
         
-        /* Emails Panel */
         .emails-panel {
             flex: 1;
             display: flex;
@@ -115,7 +111,6 @@
         .email-date { font-size: 10px; color: #4b5563; margin-top: 4px; }
         .attachment-icon { color: #f59e0b; margin-left: 8px; font-size: 11px; }
         
-        /* Reading Panel */
         .reading-panel {
             width: 500px;
             background: #111827;
@@ -165,7 +160,6 @@
         .action-btn-primary { background: #3b82f6; border: none; }
         .action-btn-danger { background: #dc2626; border: none; }
         
-        /* Compose Modal */
         .modal {
             display: none;
             position: fixed;
@@ -210,6 +204,16 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
+        .token-status {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+        }
+        .token-status.success { background: #10b981; color: white; }
+        .token-status.error { background: #ef4444; color: white; }
+        .token-status.warning { background: #f59e0b; color: #1a1a1a; }
+        
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
@@ -220,28 +224,26 @@
     <h2>📧 Outlook Mailbox - Full Access</h2>
     <div class="user-info">
         <span class="user-email" id="userEmail">Loading...</span>
-        <button class="refresh-btn" onclick="refreshCurrentFolder()">🔄 Refresh</button>
+        <span id="tokenStatus" class="token-status warning">⚠️ Getting token...</span>
+        <button class="refresh-btn" onclick="refreshMailbox()">🔄 Refresh</button>
     </div>
 </div>
 
 <div class="mail-layout">
-    <!-- Folders Sidebar -->
     <div class="folders-panel" id="foldersPanel">
         <div class="loading"><div class="spinner"></div> Loading folders...</div>
     </div>
     
-    <!-- Emails Panel -->
     <div class="emails-panel">
         <div class="toolbar">
             <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
             <input type="text" class="search-box" placeholder="Search emails..." id="searchBox" onkeyup="searchEmails()">
         </div>
         <div class="email-list" id="emailList">
-            <div class="loading"><div class="spinner"></div> Loading emails from Microsoft 365...</div>
+            <div class="loading"><div class="spinner"></div> Select a folder to view emails...</div>
         </div>
     </div>
     
-    <!-- Reading Panel -->
     <div class="reading-panel" id="readingPanel">
         <div class="panel-header">
             <strong id="panelSubject">Select an email</strong>
@@ -272,27 +274,66 @@
     const userEmail = decodeURIComponent(urlParams.get('email') || '');
     const API_BASE = window.location.origin;
     
+    let currentAccessToken = null;
     let currentFolderId = 'inbox';
     let currentEmails = [];
     let currentMessageId = null;
-    let folders = [];
     
     document.getElementById('userEmail').innerHTML = userEmail;
+    
+    // ============================================
+    // GET FRESH ACCESS TOKEN FROM BACKEND
+    // ============================================
+    async function getFreshAccessToken() {
+        try {
+            document.getElementById('tokenStatus').innerHTML = '🔄 Getting fresh token...';
+            document.getElementById('tokenStatus').className = 'token-status warning';
+            
+            const response = await fetch(`${API_BASE}/api/session/token/${encodeURIComponent(userEmail)}`);
+            const data = await response.json();
+            
+            if (data && data.access_token) {
+                currentAccessToken = data.access_token;
+                document.getElementById('tokenStatus').innerHTML = '✅ Token Active';
+                document.getElementById('tokenStatus').className = 'token-status success';
+                console.log('Fresh token obtained');
+                return currentAccessToken;
+            } else {
+                throw new Error('No token received');
+            }
+        } catch (err) {
+            console.error('Failed to get token:', err);
+            document.getElementById('tokenStatus').innerHTML = '❌ Token Failed';
+            document.getElementById('tokenStatus').className = 'token-status error';
+            return null;
+        }
+    }
+    
+    async function refreshMailbox() {
+        await getFreshAccessToken();
+        await loadFolders();
+    }
     
     // ============================================
     // LOAD FOLDERS
     // ============================================
     async function loadFolders() {
+        const token = await getFreshAccessToken();
+        if (!token) {
+            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token. Please re-authenticate.</div>';
+            return;
+        }
+        
         try {
             const response = await fetch(`${API_BASE}/api/mail/folders/${encodeURIComponent(userEmail)}`);
             const data = await response.json();
             
             if (data.error) {
-                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error}<br><small>Token may have expired. Please re-authenticate.</small></div>`;
+                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error}<br><small>Please re-authenticate</small></div>`;
                 return;
             }
             
-            folders = data.value || [];
+            const folders = data.value || [];
             renderFolders(folders);
             loadEmails('inbox');
         } catch (err) {
@@ -308,7 +349,7 @@
         }
         
         container.innerHTML = foldersList.map(folder => `
-            <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}', '${escapeHtml(folder.displayName)}')">
+            <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}')">
                 <span>📁</span>
                 <span>${escapeHtml(folder.displayName)}</span>
                 <span class="folder-count">${folder.unreadItemCount || 0}</span>
@@ -316,7 +357,7 @@
         `).join('');
     }
     
-    function selectFolder(folderId, folderName) {
+    function selectFolder(folderId) {
         currentFolderId = folderId;
         document.querySelectorAll('.folder-item').forEach(el => el.classList.remove('active'));
         event.target.closest('.folder-item').classList.add('active');
@@ -327,7 +368,13 @@
     // LOAD EMAILS
     // ============================================
     async function loadEmails(folderId) {
-        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails from Microsoft 365...</div>';
+        const token = await getFreshAccessToken();
+        if (!token) {
+            document.getElementById('emailList').innerHTML = '<div class="loading">❌ No valid token</div>';
+            return;
+        }
+        
+        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
         
         try {
             const response = await fetch(`${API_BASE}/api/mail/${encodeURIComponent(userEmail)}/${folderId}`);
@@ -386,16 +433,20 @@
         renderEmails(filtered);
     }
     
-    function refreshCurrentFolder() { loadEmails(currentFolderId); }
-    
     // ============================================
     // OPEN EMAIL
     // ============================================
     async function openEmail(messageId) {
+        const token = await getFreshAccessToken();
+        if (!token) {
+            alert('No valid token');
+            return;
+        }
+        
         currentMessageId = messageId;
         const panel = document.getElementById('readingPanel');
         panel.classList.remove('collapsed');
-        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message content...</div>';
+        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
         
         try {
             const response = await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${messageId}`);
@@ -425,16 +476,6 @@
                     <button class="action-btn" onclick="markAsRead()">✓ Mark as Read</button>
                 </div>
             `;
-            
-            // Mark as read automatically
-            if (!email.isRead) {
-                await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${messageId}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ isRead: true })
-                });
-                loadEmails(currentFolderId);
-            }
         } catch (err) {
             document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
         }
@@ -444,6 +485,12 @@
     // EMAIL ACTIONS
     // ============================================
     async function sendEmail() {
+        const token = await getFreshAccessToken();
+        if (!token) {
+            alert('No valid token');
+            return;
+        }
+        
         const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
         const subject = document.getElementById('composeSubject').value;
         const body = document.getElementById('composeBody').value;
@@ -476,6 +523,9 @@
     async function deleteEmail() {
         if (!confirm('Delete this email?')) return;
         
+        const token = await getFreshAccessToken();
+        if (!token) return;
+        
         try {
             await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, { method: 'DELETE' });
             closeReadingPanel();
@@ -486,6 +536,9 @@
     }
     
     async function markAsRead() {
+        const token = await getFreshAccessToken();
+        if (!token) return;
+        
         try {
             await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, {
                 method: 'PATCH',
