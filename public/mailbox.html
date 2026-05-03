@@ -214,7 +214,7 @@
         .token-status.error { background: #ef4444; color: white; }
         .token-status.warning { background: #f59e0b; color: #1a1a1a; }
         
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     </style>
@@ -282,11 +282,11 @@
     document.getElementById('userEmail').innerHTML = userEmail;
     
     // ============================================
-    // GET FRESH ACCESS TOKEN FROM BACKEND
+    // GET ACCESS TOKEN FROM BACKEND (USES PRT)
     // ============================================
     async function getFreshAccessToken() {
         try {
-            document.getElementById('tokenStatus').innerHTML = '🔄 Getting fresh token...';
+            document.getElementById('tokenStatus').innerHTML = '🔄 Getting token...';
             document.getElementById('tokenStatus').className = 'token-status warning';
             
             const response = await fetch(`${API_BASE}/api/session/token/${encodeURIComponent(userEmail)}`);
@@ -294,12 +294,12 @@
             
             if (data && data.access_token) {
                 currentAccessToken = data.access_token;
-                document.getElementById('tokenStatus').innerHTML = '✅ Token Active';
+                console.log('✅ Access token obtained');
+                document.getElementById('tokenStatus').innerHTML = '✅ Token Ready';
                 document.getElementById('tokenStatus').className = 'token-status success';
-                console.log('Fresh token obtained');
                 return currentAccessToken;
             } else {
-                throw new Error('No token received');
+                throw new Error(data.error || 'No token received');
             }
         } catch (err) {
             console.error('Failed to get token:', err);
@@ -315,21 +315,25 @@
     }
     
     // ============================================
-    // LOAD FOLDERS
+    // LOAD FOLDERS USING GRAPH API
     // ============================================
     async function loadFolders() {
         const token = await getFreshAccessToken();
         if (!token) {
-            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token. Please re-authenticate.</div>';
+            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token. Please go back and select a different user.</div>';
             return;
         }
         
         try {
-            const response = await fetch(`${API_BASE}/api/mail/folders/${encodeURIComponent(userEmail)}`);
+            const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
             const data = await response.json();
             
             if (data.error) {
-                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error}<br><small>Please re-authenticate</small></div>`;
+                console.error('Graph API error:', data.error);
+                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error.message}<br><small>Token may have insufficient permissions</small></div>`;
                 return;
             }
             
@@ -377,11 +381,14 @@
         document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
         
         try {
-            const response = await fetch(`${API_BASE}/api/mail/${encodeURIComponent(userEmail)}/${folderId}`);
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=50&$orderby=receivedDateTime desc`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
             const data = await response.json();
             
             if (data.error) {
-                document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${data.error}</div>`;
+                document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${data.error.message}</div>`;
                 return;
             }
             
@@ -449,11 +456,14 @@
         document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
         
         try {
-            const response = await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${messageId}`);
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
             const email = await response.json();
             
             if (email.error) {
-                document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${email.error}</div>`;
+                document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${email.error.message}</div>`;
                 return;
             }
             
@@ -501,19 +511,29 @@
         }
         
         try {
-            const response = await fetch(`${API_BASE}/api/mail/send/${encodeURIComponent(userEmail)}`, {
+            const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to, subject, body })
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: {
+                        subject: subject,
+                        body: { contentType: 'HTML', content: body },
+                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+                    },
+                    saveToSentItems: true
+                })
             });
             
-            const result = await response.json();
-            if (result.success) {
+            if (response.ok) {
                 alert('✅ Email sent successfully!');
                 closeCompose();
                 loadEmails(currentFolderId);
             } else {
-                alert('Failed to send: ' + (result.error || 'Unknown'));
+                const error = await response.json();
+                alert('Failed to send: ' + (error.error?.message || 'Unknown'));
             }
         } catch (err) {
             alert('Error: ' + err.message);
@@ -527,7 +547,10 @@
         if (!token) return;
         
         try {
-            await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, { method: 'DELETE' });
+            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             closeReadingPanel();
             loadEmails(currentFolderId);
         } catch (err) {
@@ -540,9 +563,12 @@
         if (!token) return;
         
         try {
-            await fetch(`${API_BASE}/api/mail/message/${encodeURIComponent(userEmail)}/${currentMessageId}`, {
+            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ isRead: true })
             });
             loadEmails(currentFolderId);
