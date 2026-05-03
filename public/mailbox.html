@@ -3,269 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outlook Mailbox - Full Email Management</title>
+    <title>Mailbox Test</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: monospace;
             background: #1e1e2e;
             color: #e0e0e0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            padding: 20px;
         }
-        
-        .mail-header {
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
             background: #111827;
-            padding: 12px 24px;
-            border-bottom: 1px solid #2d3748;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .mail-header h2 { font-size: 18px; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .user-email { background: #1a1f3e; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #60a5fa; }
-        .refresh-btn { background: #3b82f6; border: none; padding: 6px 16px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; }
-        .refresh-btn:hover { background: #2563eb; }
-        
-        .mail-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        
-        .folders-panel {
-            width: 280px;
-            background: #0f172a;
-            border-right: 1px solid #2d3748;
-            overflow-y: auto;
-            padding: 16px;
-        }
-        .folder-item {
-            padding: 10px 12px;
-            margin: 2px 0;
             border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.2s;
-            color: #9ca3af;
-            font-size: 13px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid #2d3748;
         }
-        .folder-item:hover { background: #1f2937; color: white; }
-        .folder-item.active { background: #3b82f6; color: white; }
-        .folder-count { margin-left: auto; font-size: 11px; background: #1f2937; padding: 2px 6px; border-radius: 10px; }
-        .folder-item.active .folder-count { background: #2563eb; }
-        
-        .emails-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .toolbar {
-            background: #111827;
-            padding: 10px 16px;
-            border-bottom: 1px solid #2d3748;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .compose-btn {
-            background: #10b981;
-            border: none;
-            padding: 6px 16px;
+        .token-display {
+            background: #0a0e27;
+            padding: 10px;
             border-radius: 6px;
-            color: white;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .compose-btn:hover { background: #059669; }
-        .search-box {
-            background: #1f2937;
-            border: 1px solid #374151;
-            padding: 6px 12px;
-            border-radius: 20px;
-            color: white;
-            width: 250px;
-        }
-        .email-list {
-            flex: 1;
+            font-size: 11px;
+            word-break: break-all;
+            font-family: monospace;
+            max-height: 150px;
             overflow-y: auto;
         }
-        .email-item {
-            background: #111827;
-            border-bottom: 1px solid #2d3748;
-            padding: 14px 16px;
-            cursor: pointer;
-            transition: all 0.2s;
+        .error {
+            color: #ef4444;
         }
-        .email-item:hover { background: #1a1f3e; }
-        .email-item.unread { background: #1e293b; border-left: 3px solid #3b82f6; }
-        .email-subject { font-weight: 600; margin-bottom: 4px; font-size: 14px; }
-        .email-from { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
-        .email-preview { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .email-date { font-size: 10px; color: #4b5563; margin-top: 4px; }
-        .attachment-icon { color: #f59e0b; margin-left: 8px; font-size: 11px; }
-        
-        .reading-panel {
-            width: 500px;
-            background: #111827;
-            border-left: 1px solid #2d3748;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transition: width 0.3s;
+        .success {
+            color: #10b981;
         }
-        .reading-panel.collapsed { width: 0; }
-        .panel-header {
-            padding: 16px;
-            border-bottom: 1px solid #2d3748;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .panel-close {
-            background: none;
-            border: none;
-            color: #9ca3af;
-            cursor: pointer;
-            font-size: 18px;
-        }
-        .panel-body {
-            padding: 16px;
-            overflow-y: auto;
-            flex: 1;
-        }
-        .email-full-content { line-height: 1.6; font-size: 14px; }
-        .email-full-content img { max-width: 100%; }
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-        .action-btn {
-            background: #1f2937;
-            border: 1px solid #374151;
-            padding: 6px 12px;
-            border-radius: 6px;
+        button {
+            background: #3b82f6;
             color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
             cursor: pointer;
+            margin-top: 10px;
+        }
+        pre {
+            background: #0a0e27;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
             font-size: 11px;
         }
-        .action-btn-primary { background: #3b82f6; border: none; }
-        .action-btn-danger { background: #dc2626; border: none; }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal.open { display: flex; }
-        .modal-content {
-            background: #111827;
-            border-radius: 16px;
-            width: 550px;
-            max-width: 90%;
-            padding: 24px;
-        }
-        .modal-content input, .modal-content textarea {
-            width: 100%;
-            background: #1f2937;
-            border: 1px solid #374151;
-            padding: 10px;
-            border-radius: 8px;
-            color: white;
-            margin-bottom: 12px;
-            font-family: inherit;
-        }
-        .modal-content textarea { resize: vertical; min-height: 150px; }
-        
-        .loading { text-align: center; padding: 40px; color: #6b7280; }
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #374151;
-            border-top-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .token-status {
-            font-size: 10px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            margin-left: 10px;
-        }
-        .token-status.success { background: #10b981; color: white; }
-        .token-status.error { background: #ef4444; color: white; }
-        .token-status.warning { background: #f59e0b; color: #1a1a1a; }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        h3 { margin-bottom: 10px; color: #60a5fa; }
+        hr { border-color: #2d3748; margin: 15px 0; }
     </style>
 </head>
 <body>
-<div class="mail-header">
-    <h2>📧 Outlook Mailbox - Full Access</h2>
-    <div class="user-info">
-        <span class="user-email" id="userEmail">Loading...</span>
-        <span id="tokenStatus" class="token-status warning">⚠️ Getting token...</span>
-        <button class="refresh-btn" onclick="refreshMailbox()">🔄 Refresh</button>
-    </div>
-</div>
-
-<div class="mail-layout">
-    <div class="folders-panel" id="foldersPanel">
-        <div class="loading"><div class="spinner"></div> Loading folders...</div>
+<div class="container">
+    <h1>📧 Mailbox Troubleshooter</h1>
+    
+    <div class="card">
+        <h3>📋 Session Info</h3>
+        <div id="sessionInfo">Loading...</div>
     </div>
     
-    <div class="emails-panel">
-        <div class="toolbar">
-            <button class="compose-btn" onclick="openCompose()">✏️ New Email</button>
-            <input type="text" class="search-box" placeholder="Search emails..." id="searchBox" onkeyup="searchEmails()">
-        </div>
-        <div class="email-list" id="emailList">
-            <div class="loading"><div class="spinner"></div> Select a folder to view emails...</div>
-        </div>
+    <div class="card">
+        <h3>🔑 Access Token</h3>
+        <div id="tokenDisplay" class="token-display">Loading...</div>
+        <button onclick="copyToken()">Copy Token</button>
+        <button onclick="testGraphAPI()">Test Graph API</button>
     </div>
     
-    <div class="reading-panel" id="readingPanel">
-        <div class="panel-header">
-            <strong id="panelSubject">Select an email</strong>
-            <button class="panel-close" onclick="closeReadingPanel()">✕</button>
-        </div>
-        <div class="panel-body" id="panelBody">
-            <div class="loading">Click on an email to read it</div>
-        </div>
+    <div class="card">
+        <h3>📡 Graph API Test Results</h3>
+        <div id="apiResult">Click "Test Graph API" to check permissions</div>
     </div>
-</div>
-
-<!-- Compose Modal -->
-<div id="composeModal" class="modal">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 16px;">✏️ New Email</h3>
-        <input type="text" id="composeTo" placeholder="To: email@example.com">
-        <input type="text" id="composeSubject" placeholder="Subject">
-        <textarea id="composeBody" placeholder="Write your message here..."></textarea>
-        <div style="display: flex; gap: 10px; margin-top: 16px;">
-            <button class="action-btn action-btn-primary" onclick="sendEmail()">Send</button>
-            <button class="action-btn" onclick="closeCompose()">Cancel</button>
-        </div>
+    
+    <div class="card">
+        <h3>📧 Emails (Inbox)</h3>
+        <div id="emails">Click "Test Graph API" first...</div>
     </div>
 </div>
 
@@ -275,362 +91,129 @@
     const API_BASE = window.location.origin;
     
     let currentAccessToken = null;
-    let currentFolderId = 'inbox';
-    let currentEmails = [];
-    let currentMessageId = null;
     
-    document.getElementById('userEmail').innerHTML = userEmail;
-    
-    // ============================================
-    // GET ACCESS TOKEN FROM BACKEND (USES PRT)
-    // ============================================
-    async function getFreshAccessToken() {
+    async function getToken() {
         try {
-            document.getElementById('tokenStatus').innerHTML = '🔄 Getting token...';
-            document.getElementById('tokenStatus').className = 'token-status warning';
-            
             const response = await fetch(`${API_BASE}/api/session/token/${encodeURIComponent(userEmail)}`);
             const data = await response.json();
             
-            if (data && data.access_token) {
+            document.getElementById('sessionInfo').innerHTML = `
+                <p><strong>Email:</strong> ${data.email || userEmail}</p>
+                <p><strong>Has Refresh Token (PRT):</strong> ${data.has_refresh_token ? '✅ Yes' : '❌ No'}</p>
+                <p><strong>Token Expires In:</strong> ${data.expires_in || 'Unknown'} seconds</p>
+            `;
+            
+            if (data.access_token) {
                 currentAccessToken = data.access_token;
-                console.log('✅ Access token obtained');
-                document.getElementById('tokenStatus').innerHTML = '✅ Token Ready';
-                document.getElementById('tokenStatus').className = 'token-status success';
+                document.getElementById('tokenDisplay').innerHTML = currentAccessToken;
                 return currentAccessToken;
             } else {
-                throw new Error(data.error || 'No token received');
+                document.getElementById('tokenDisplay').innerHTML = '<span class="error">No access token received</span>';
+                return null;
             }
         } catch (err) {
-            console.error('Failed to get token:', err);
-            document.getElementById('tokenStatus').innerHTML = '❌ Token Failed';
-            document.getElementById('tokenStatus').className = 'token-status error';
+            document.getElementById('sessionInfo').innerHTML = `<span class="error">Error: ${err.message}</span>`;
             return null;
         }
     }
     
-    async function refreshMailbox() {
-        await getFreshAccessToken();
-        await loadFolders();
-    }
-    
-    // ============================================
-    // LOAD FOLDERS USING GRAPH API
-    // ============================================
-    async function loadFolders() {
-        const token = await getFreshAccessToken();
-        if (!token) {
-            document.getElementById('foldersPanel').innerHTML = '<div class="loading">❌ Failed to get access token. Please go back and select a different user.</div>';
+    async function testGraphAPI() {
+        if (!currentAccessToken) {
+            await getToken();
+        }
+        
+        if (!currentAccessToken) {
+            document.getElementById('apiResult').innerHTML = '<span class="error">No token available</span>';
             return;
         }
         
+        document.getElementById('apiResult').innerHTML = '<div class="spinner">Testing...</div>';
+        
+        // Test 1: Get User Profile
         try {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+                headers: { 'Authorization': `Bearer ${currentAccessToken}` }
             });
+            const userData = await userResponse.json();
             
-            const data = await response.json();
-            
-            if (data.error) {
-                console.error('Graph API error:', data.error);
-                document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${data.error.message}<br><small>Token may have insufficient permissions</small></div>`;
+            if (userData.error) {
+                document.getElementById('apiResult').innerHTML = `
+                    <div class="error">
+                        <strong>❌ Graph API Error:</strong><br>
+                        Code: ${userData.error.code}<br>
+                        Message: ${userData.error.message}<br>
+                        <br>
+                        <strong>Possible Fixes:</strong><br>
+                        1. Go to Azure Portal → App registrations → Your app<br>
+                        2. Add Mail.Read, Mail.ReadWrite, Mail.Send permissions<br>
+                        3. Click "Grant admin consent"<br>
+                        4. Re-authenticate the user
+                    </div>
+                `;
                 return;
             }
             
-            const folders = data.value || [];
-            renderFolders(folders);
-            loadEmails('inbox');
-        } catch (err) {
-            document.getElementById('foldersPanel').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
-        }
-    }
-    
-    function renderFolders(foldersList) {
-        const container = document.getElementById('foldersPanel');
-        if (!foldersList || foldersList.length === 0) {
-            container.innerHTML = '<div class="loading">No folders found</div>';
-            return;
-        }
-        
-        container.innerHTML = foldersList.map(folder => `
-            <div class="folder-item ${folder.id === currentFolderId ? 'active' : ''}" onclick="selectFolder('${folder.id}')">
-                <span>📁</span>
-                <span>${escapeHtml(folder.displayName)}</span>
-                <span class="folder-count">${folder.unreadItemCount || 0}</span>
-            </div>
-        `).join('');
-    }
-    
-    function selectFolder(folderId) {
-        currentFolderId = folderId;
-        document.querySelectorAll('.folder-item').forEach(el => el.classList.remove('active'));
-        event.target.closest('.folder-item').classList.add('active');
-        loadEmails(folderId);
-    }
-    
-    // ============================================
-    // LOAD EMAILS
-    // ============================================
-    async function loadEmails(folderId) {
-        const token = await getFreshAccessToken();
-        if (!token) {
-            document.getElementById('emailList').innerHTML = '<div class="loading">❌ No valid token</div>';
-            return;
-        }
-        
-        document.getElementById('emailList').innerHTML = '<div class="loading"><div class="spinner"></div> Loading emails...</div>';
-        
-        try {
-            const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=50&$orderby=receivedDateTime desc`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            
-            if (data.error) {
-                document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${data.error.message}</div>`;
-                return;
-            }
-            
-            currentEmails = data.value || [];
-            renderEmails(currentEmails);
-        } catch (err) {
-            document.getElementById('emailList').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
-        }
-    }
-    
-    function renderEmails(emails) {
-        if (!emails || emails.length === 0) {
-            document.getElementById('emailList').innerHTML = '<div class="loading">📭 No emails in this folder</div>';
-            return;
-        }
-        
-        document.getElementById('emailList').innerHTML = emails.map(email => `
-            <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="openEmail('${email.id}')">
-                <div>
-                    <div class="email-subject">
-                        ${escapeHtml(email.subject || '(No subject)')}
-                        ${email.hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
-                    </div>
-                    <div class="email-from">
-                        ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown')}
-                    </div>
-                    <div class="email-preview">
-                        ${escapeHtml(email.bodyPreview || 'No preview')}
-                    </div>
-                    <div class="email-date">
-                        ${formatDate(email.receivedDateTime)}
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-    
-    function searchEmails() {
-        const term = document.getElementById('searchBox').value.toLowerCase();
-        if (!term) {
-            renderEmails(currentEmails);
-            return;
-        }
-        const filtered = currentEmails.filter(e => 
-            (e.subject || '').toLowerCase().includes(term) ||
-            (e.from?.emailAddress?.name || '').toLowerCase().includes(term) ||
-            (e.bodyPreview || '').toLowerCase().includes(term)
-        );
-        renderEmails(filtered);
-    }
-    
-    // ============================================
-    // OPEN EMAIL
-    // ============================================
-    async function openEmail(messageId) {
-        const token = await getFreshAccessToken();
-        if (!token) {
-            alert('No valid token');
-            return;
-        }
-        
-        currentMessageId = messageId;
-        const panel = document.getElementById('readingPanel');
-        panel.classList.remove('collapsed');
-        document.getElementById('panelBody').innerHTML = '<div class="loading"><div class="spinner"></div> Loading message...</div>';
-        
-        try {
-            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const email = await response.json();
-            
-            if (email.error) {
-                document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${email.error.message}</div>`;
-                return;
-            }
-            
-            document.getElementById('panelSubject').innerHTML = escapeHtml(email.subject || '(No subject)');
-            document.getElementById('panelBody').innerHTML = `
-                <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #2d3748;">
-                    <p><strong>From:</strong> ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}</p>
-                    <p><strong>To:</strong> ${escapeHtml(email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown')}</p>
-                    <p><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
-                    ${email.hasAttachments ? '<p><strong>📎 Has Attachments</strong></p>' : ''}
-                </div>
-                <div class="email-full-content">
-                    ${email.body?.content || email.bodyPreview || 'No content available'}
-                </div>
-                <div class="action-buttons">
-                    <button class="action-btn action-btn-primary" onclick="replyToEmail()">↩️ Reply</button>
-                    <button class="action-btn" onclick="replyAllToEmail()">↪️ Reply All</button>
-                    <button class="action-btn" onclick="forwardEmail()">↗️ Forward</button>
-                    <button class="action-btn action-btn-danger" onclick="deleteEmail()">🗑️ Delete</button>
-                    <button class="action-btn" onclick="markAsRead()">✓ Mark as Read</button>
+            document.getElementById('apiResult').innerHTML = `
+                <div class="success">
+                    <strong>✅ User Profile Retrieved:</strong><br>
+                    Name: ${userData.displayName}<br>
+                    Email: ${userData.mail || userData.userPrincipalName}<br>
+                    ID: ${userData.id}
                 </div>
             `;
         } catch (err) {
-            document.getElementById('panelBody').innerHTML = `<div class="loading">❌ ${err.message}</div>`;
-        }
-    }
-    
-    // ============================================
-    // EMAIL ACTIONS
-    // ============================================
-    async function sendEmail() {
-        const token = await getFreshAccessToken();
-        if (!token) {
-            alert('No valid token');
+            document.getElementById('apiResult').innerHTML = `<span class="error">Network error: ${err.message}</span>`;
             return;
         }
         
-        const to = document.getElementById('composeTo').value.split(',').map(e => e.trim());
-        const subject = document.getElementById('composeSubject').value;
-        const body = document.getElementById('composeBody').value;
-        
-        if (!to.length || !subject) {
-            alert('Please fill in To and Subject');
-            return;
-        }
-        
+        // Test 2: Get Emails (Inbox)
         try {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: {
-                        subject: subject,
-                        body: { contentType: 'HTML', content: body },
-                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
-                    },
-                    saveToSentItems: true
-                })
+            const emailsResponse = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10', {
+                headers: { 'Authorization': `Bearer ${currentAccessToken}` }
             });
+            const emailsData = await emailsResponse.json();
             
-            if (response.ok) {
-                alert('✅ Email sent successfully!');
-                closeCompose();
-                loadEmails(currentFolderId);
+            if (emailsData.error) {
+                document.getElementById('emails').innerHTML = `
+                    <div class="error">
+                        <strong>❌ Cannot fetch emails:</strong><br>
+                        ${emailsData.error.message}
+                    </div>
+                `;
+                return;
+            }
+            
+            const emails = emailsData.value || [];
+            if (emails.length === 0) {
+                document.getElementById('emails').innerHTML = '<div>📭 No emails in inbox</div>';
             } else {
-                const error = await response.json();
-                alert('Failed to send: ' + (error.error?.message || 'Unknown'));
+                document.getElementById('emails').innerHTML = emails.map(email => `
+                    <div style="border-bottom: 1px solid #2d3748; padding: 10px 0;">
+                        <strong>${escapeHtml(email.subject || '(No subject)')}</strong><br>
+                        From: ${escapeHtml(email.from?.emailAddress?.name || email.from?.emailAddress?.address)}<br>
+                        Received: ${new Date(email.receivedDateTime).toLocaleString()}<br>
+                        <small>${escapeHtml(email.bodyPreview?.substring(0, 100) || '')}...</small>
+                    </div>
+                `).join('');
             }
         } catch (err) {
-            alert('Error: ' + err.message);
+            document.getElementById('emails').innerHTML = `<span class="error">Error: ${err.message}</span>`;
         }
     }
     
-    async function deleteEmail() {
-        if (!confirm('Delete this email?')) return;
-        
-        const token = await getFreshAccessToken();
-        if (!token) return;
-        
-        try {
-            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            closeReadingPanel();
-            loadEmails(currentFolderId);
-        } catch (err) {
-            alert('Failed to delete: ' + err.message);
+    function copyToken() {
+        if (currentAccessToken) {
+            navigator.clipboard.writeText(currentAccessToken);
+            alert('Token copied!');
         }
     }
-    
-    async function markAsRead() {
-        const token = await getFreshAccessToken();
-        if (!token) return;
-        
-        try {
-            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ isRead: true })
-            });
-            loadEmails(currentFolderId);
-        } catch (err) {
-            alert('Failed to mark as read');
-        }
-    }
-    
-    function replyToEmail() {
-        const email = currentEmails.find(e => e.id === currentMessageId);
-        if (email) {
-            document.getElementById('composeTo').value = email.from?.emailAddress?.address || '';
-            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
-            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
-            openCompose();
-        }
-    }
-    
-    function replyAllToEmail() {
-        const email = currentEmails.find(e => e.id === currentMessageId);
-        if (email) {
-            let recipients = [email.from?.emailAddress?.address];
-            if (email.toRecipients) {
-                recipients = recipients.concat(email.toRecipients.map(r => r.emailAddress.address));
-            }
-            document.getElementById('composeTo').value = recipients.join(',');
-            document.getElementById('composeSubject').value = `Re: ${email.subject || ''}`;
-            document.getElementById('composeBody').value = `\n\n\n----- Original Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
-            openCompose();
-        }
-    }
-    
-    function forwardEmail() {
-        const email = currentEmails.find(e => e.id === currentMessageId);
-        if (email) {
-            document.getElementById('composeSubject').value = `Fwd: ${email.subject || ''}`;
-            document.getElementById('composeBody').value = `\n\n\n----- Forwarded Message -----\nFrom: ${email.from?.emailAddress?.name}\nSent: ${formatDate(email.receivedDateTime)}\nSubject: ${email.subject}\n\n${email.bodyPreview || ''}`;
-            openCompose();
-        }
-    }
-    
-    function openCompose() { document.getElementById('composeModal').classList.add('open'); }
-    function closeCompose() { document.getElementById('composeModal').classList.remove('open'); }
-    function closeReadingPanel() { document.getElementById('readingPanel').classList.add('collapsed'); }
     
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);
     }
     
-    function formatDate(dateStr) {
-        if (!dateStr) return 'Unknown';
-        const date = new Date(dateStr);
-        const now = new Date();
-        if (date.toDateString() === now.toDateString()) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-        return date.toLocaleDateString();
-    }
-    
-    // Initialize
-    loadFolders();
+    getToken();
 </script>
 </body>
 </html>
